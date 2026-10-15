@@ -20,7 +20,15 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `python training\extract_revisions.py` — mine Karina's tracked changes → `training/extracted/` (+ hold-out originals)
 - `cd web; npm run proofread -- <file|folder> [--out dir] [--no-grammar]` — Karina-style tracked-changes docx (rules engine, no AI)
 - `python training\eval.py --bot <dir>` — score bot output vs Karina's real edits on the 6 hold-out docs (never tune rules on them)
-- `cd web; npm test` — docx writer + rules unit tests
+- `cd web; npm test` — docx writer + rules + AI-layer unit tests
+- `cd web; npm run dev` → http://localhost:3000 (jobs stored in `web/.data/`, gitignored)
+- `cd web; node scripts/e2e.mjs <sample.docx>` — full browser check (system Edge via playwright-core; dev server must run)
+- `cd web; node scripts/seed.mjs <files> [--ai]` / `node scripts/clear-jobs.mjs` — load or clear documents in the local app
+
+## Web app notes
+- SuperDoc v2 (`@superdoc/react`): document API is async (`activeEditor.doc.*` returns promises); `viewing.trackedChanges` must be `'markup'|'final'|'original'`; telemetry must stay `{ enabled: false }`.
+- CSP in `next.config.ts` keeps the browser on `connect-src 'self'`.
+- Editor saves go through `lib/docx/normalize.ts` (Word-identical metadata, no editor traces).
 
 ## Engine
 - `web/src/lib/docx/` — OOXML engine (accept/reject, tracked insert/delete/format, Word-exact metadata). Element order in rPr/pPr matters (Word rejects out-of-order).

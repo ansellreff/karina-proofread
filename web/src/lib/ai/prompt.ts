@@ -12,6 +12,11 @@ function promptsDir(): string {
 
 let cachedSystem: string | null = null;
 
+/** Call after the rulebook is edited so the next run uses it. */
+export function resetPromptCache(): void {
+  cachedSystem = null;
+}
+
 /** Stable system prompt (cached by the API): role, Karina's rulebook, examples, output rules. */
 export function systemPrompt(): string {
   if (cachedSystem) return cachedSystem;

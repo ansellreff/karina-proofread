@@ -15,6 +15,15 @@ export class DocxPackage {
     return this.zip.file(path) !== null;
   }
 
+  paths(): string[] {
+    return Object.keys(this.zip.files).filter((n) => !this.zip.files[n].dir);
+  }
+
+  removePart(path: string): void {
+    this.parsed.delete(path);
+    delete this.zip.files[path];
+  }
+
   async xml(path: string): Promise<Document | null> {
     const cached = this.parsed.get(path);
     if (cached) return cached;

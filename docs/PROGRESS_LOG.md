@@ -153,3 +153,73 @@ Notes on the numbers:
 - All outputs open cleanly in desktop Word. Every change is by Karina Octavia, and nothing in the files mentions AI/bot/Claude.
 
 **Review files:** `training/output/review/M2_AI_*.docx`
+
+---
+
+## M3 — Web app (local): inbox, review editor, restore original, export ✅
+**2026-10-16**
+
+**Goal:** a web app where Karina uploads a document, runs the bot, reviews every change in a Word-like editor,
+can undo anything (including returning to the original), and exports DOCX or PDF. It works on PC and phone.
+
+### What was built
+- **Documents inbox** (`/`):
+  - drag and drop or "Choose files" (.docx);
+  - a list showing student name, document type, status (New / Proofreading / Ready to review / Done) and last update.
+- **Proofread dialog:**
+  - AI on/off switch;
+  - a **cost estimate before running** (tokens and US$), plus the balance left if Karina entered one;
+  - live progress (reading → your rules → AI → writing tracked changes).
+- **Review editor** (`/jobs/[id]`), built on SuperDoc v2, a Word editor that runs in the browser:
+  - Suggesting / Editing / Viewing modes. In Suggesting mode, Karina's own edits are also tracked as Karina Octavia.
+  - Word toolbar: fonts, highlight, comments, lists, undo/redo.
+  - **"What changed" panel:**
+    - every bot change as a mini redline (red strikethrough, green insertion) with its private reason;
+    - filters: All, Fixes, Notes, Removed text, Beyond your style;
+    - accept or reject one change; Accept all / Reject all;
+    - the bot's formatting changes grouped as one item.
+  - **Comments** tab: real Word comments by Karina Octavia.
+  - **Re-check selection:** select a passage and the AI looks at just that part again. Its fixes appear as new tracked changes
+    in the editor (one paragraph cost US$0.017).
+- **Restore original (Karina's request):**
+  - **"Restore removed text":** puts back everything the bot deleted, in one click or change by change.
+  - **"Restore the original document":** the student's file comes back byte-for-byte as received.
+  - **Versions** tab: Original → Bot proofread → your edits → … Open or restore any version. Nothing is ever overwritten.
+  - **Autosave** every 90 seconds into one rolling "Your edits (autosaved)" version, plus a warning before leaving with unsaved edits.
+- **Export:**
+  - Word with tracked changes;
+  - clean Word (all changes accepted, comments removed);
+  - PDF clean or PDF with markup (through the print dialog; OneDrive conversion comes in M4);
+  - files named `DONE_<Name>_<DocType>_<YYYYMMDD>`.
+- **Style rulebook page:** view and edit what the AI follows (a backup is kept on every save).
+- **Settings:** AI default on/off, model (Opus / Sonnet), thoroughness, author name, API balance, and this month's AI cost.
+- **Phone:**
+  - text reflows to the screen (web layout) instead of a shrunken page;
+  - the review panel opens as a bottom sheet;
+  - no sideways scrolling.
+
+### Found and fixed during testing
+- **SuperDoc telemetry was on by default.** It sends a "document opened" event (document ID, creation date, browser info,
+  no content) to SuperDoc's server. It is now off, and the browser security policy only allows connections to the
+  app itself, so even a library cannot send data out. Tested: no request leaves the app.
+- **A wrong display setting made the editor show and save the "original" view.** Saving would have silently dropped
+  all of the bot's tracked changes. Fixed (the value is now type-checked) and covered by a test that saves and
+  re-opens the file.
+- SuperDoc's document API is asynchronous in v2. The panel was adapted.
+- The toolbar overlapped the review panel, and change bubbles crowded the page. Both now fit their own column.
+- Saved files are cleaned the same way as bot output: Word as the application, "last modified by" = Karina Octavia,
+  Track Changes on, and no editor traces.
+
+### Verified
+- **20/20 end-to-end checks in a real browser** (Microsoft Edge driven by a test script, `web/scripts/e2e.mjs`):
+  upload, proofread, tracked changes shown and authored by Karina Octavia, accept/reject from the panel, save,
+  saved-file metadata, clean export, file naming, PDF view, restore original (byte-identical), phone layout,
+  and no external requests.
+- The editor-saved file opens cleanly in desktop Word: all revisions by Karina Octavia, Track Changes on.
+- 28 unit tests, lint, type check and the production build all pass.
+
+### Notes / limitations for review
+- The file name uses the student's first name from the document. Karina sometimes uses the name the student goes by
+  (e.g. a middle name). Editing the name in the app is a small follow-up.
+- PDF goes through the browser's "Save as PDF" until M4 adds OneDrive's Word-quality conversion.
+- Everything is local for now (files are kept in `web/.data`, gitignored). OneDrive, sign-in and Vercel come in M4.

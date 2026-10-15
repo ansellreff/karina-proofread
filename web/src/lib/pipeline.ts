@@ -34,6 +34,8 @@ export interface ProofreadOptions {
   grammarKinds?: Set<string>;
   /** Claude layer. Omit or false for the rules engine only. */
   ai?: AiOptions | false;
+  /** Progress callback for the UI. */
+  onStage?: (stage: "reading" | "rules" | "claude" | "writing") => void;
 }
 
 export interface ChangeRecord {
@@ -48,6 +50,8 @@ export interface ChangeRecord {
   beyondStyle?: boolean;
   /** Private explanation for the review panel (AI edits). Never written into the document. */
   reason?: string;
+  /** Word w:id values of the tracked insertions/deletions this change created (links the review panel to the editor). */
+  revisionIds?: string[];
 }
 
 export interface AiReport {
@@ -114,10 +118,50 @@ export async function estimateAiCost(input: Uint8Array | ArrayBuffer, opts: Proo
   return estimateCost(model, counted.total, counted.system, words);
 }
 
+export interface PassageEdit {
+  /** Exact text to find in the passage. */
+  find: string;
+  /** Replacement for `find` (a note is find + " (note)"). */
+  replace: string;
+  kind: "fix" | "note";
+  reason: string;
+  beyondStyle: boolean;
+}
+
+/**
+ * Re-check one passage Karina selected in the editor. Returns find/replace edits that the editor applies as
+ * tracked changes, so nothing is lost from her unsaved work.
+ */
+export async function recheckPassage(passage: string, docType: DocType, ai: AiOptions = {}): Promise<{ edits: PassageEdit[]; costUsd: number; model: string; usage: Usage }> {
+  const model = ai.model ?? DEFAULT_MODEL;
+  const client = ai.client ?? new AnthropicReviewClient();
+  const paras = passage.split(/\n+/).map((t) => t.trim()).filter(Boolean);
+  const ctx: RuleContext = {
+    fileName: "passage",
+    docType,
+    fullText: paras.join("\n"),
+    paras: paras.map((text, index) => ({ index, text, words: text.split(/\s+/).length, sentences: 1, inTable: false, isList: false, isShort: false })),
+  };
+  const user = `${userPrompt(ctx, [])}\n\nThis is only a passage Karina selected for a second look, not the whole document. Do not add end_note_items, suggestion_paragraphs or paragraph_deletions; use replacements and insertions only.`;
+  const res = await client.review({ system: systemPrompt(), user, model, effort: ai.effort ?? "high" });
+  const edits: PassageEdit[] = [];
+  for (const r of res.review.replacements) {
+    if (r.find && r.find !== r.replace) edits.push({ find: r.find, replace: r.replace, kind: "fix", reason: r.reason, beyondStyle: r.beyond_style });
+  }
+  for (const ins of res.review.insertions) {
+    const p = paras[ins.paragraph] ?? "";
+    const anchor = ins.after || p.split(/\s+/).slice(-4).join(" ");
+    if (anchor && ins.text) edits.push({ find: anchor, replace: anchor + ins.text, kind: ins.kind, reason: ins.reason, beyondStyle: ins.beyond_style });
+  }
+  return { edits, costUsd: costOf(res.usage, model), model: res.model, usage: res.usage };
+}
+
 export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: ProofreadOptions): Promise<ProofreadResult> {
   const identity = opts.identity ?? KARINA;
   const now = opts.now ?? new Date();
+  opts.onStage?.("reading");
   const p = await prepare(input, opts);
+  opts.onStage?.("rules");
   const { pkg, doc, paras, ctx, format, rules } = p;
 
   // ---- Claude layer: sees the document plus what the rules already did; rules win any overlap.
@@ -129,6 +173,7 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
   if (opts.ai) {
     const model = opts.ai.model ?? DEFAULT_MODEL;
     const client = opts.ai.client ?? new AnthropicReviewClient();
+    opts.onStage?.("claude");
     const res = await client.review({ system: systemPrompt(), user: userPrompt(ctx, ruleChangeRecords(p)), model, effort: opts.ai.effort ?? "high" });
     const mapped = mapReview(res.review, ctx);
     deletions = mapped.deletions;
@@ -153,6 +198,7 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
     aiReport = { model: res.model, englishQuality: res.review.english_quality, usage: res.usage, costUsd: costOf(res.usage, model), dropped: mapped.dropped };
   }
 
+  opts.onStage?.("writing");
   const reviser = new Reviser(doc, identity, now);
   const changes: ChangeRecord[] = [];
 
@@ -166,28 +212,34 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
   for (const [index, list] of byPara) {
     const para = paras[index];
     for (const e of list.sort((a, b) => b.start - a.start || b.end - a.end)) {
-      reviser.replace(para.el, e.start, e.end, e.text);
+      const revisionIds = reviser.capture(() => reviser.replace(para.el, e.start, e.end, e.text));
       changes.push({
         rule: e.rule, kind: e.kind, paragraph: index, start: e.start, end: e.end,
-        before: para.text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: reasons.get(editKey(e)),
+        before: para.text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: reasons.get(editKey(e)), revisionIds,
       });
     }
   }
 
   // 3. whole-paragraph cuts
   for (const d of deletions) {
-    reviser.deleteParagraph(paras[d.para].el);
-    changes.push({ rule: "ai:delete", kind: "delete", paragraph: d.para, start: 0, end: paras[d.para].text.length, before: paras[d.para].text, after: "", reason: d.reason });
+    const revisionIds = reviser.capture(() => reviser.deleteParagraph(paras[d.para].el));
+    changes.push({ rule: "ai:delete", kind: "delete", paragraph: d.para, start: 0, end: paras[d.para].text.length, before: paras[d.para].text, after: "", reason: d.reason, revisionIds });
   }
 
   // 4. new paragraphs: the end note first, so later "after" inserts land before it
   const ordered = [...inserts.filter((i) => i.rule === "end-note"), ...inserts.filter((i) => i.rule !== "end-note")];
   for (const ins of ordered) {
     const ref = paras[ins.para].el;
-    if (ins.position === "before") reviser.insertParagraphsBefore(ref, ins.paragraphs);
-    else reviser.insertParagraphsAfter(ref, ins.paragraphs);
+    const revisionIds = reviser.capture(() => {
+      if (ins.position === "before") reviser.insertParagraphsBefore(ref, ins.paragraphs);
+      else reviser.insertParagraphsAfter(ref, ins.paragraphs);
+    });
     const at = ins.position === "before" ? 0 : paras[ins.para].text.length;
-    for (const np of ins.paragraphs) changes.push({ rule: ins.rule, kind: "paragraph", paragraph: ins.para, start: at, end: at, before: "", after: np.text });
+    // one review item for the whole block (header lines / end note / suggestion), listing every line
+    changes.push({
+      rule: ins.rule, kind: "paragraph", paragraph: ins.para, start: at, end: at, before: "",
+      after: ins.paragraphs.map((np) => np.text).join("\n"), revisionIds,
+    });
   }
 
   await finalizeMetadata(pkg, identity, now);

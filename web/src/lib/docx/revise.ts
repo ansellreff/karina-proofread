@@ -62,7 +62,23 @@ export class Reviser {
 
   readonly author: string;
 
+  private captured: string[] | null = null;
+
+  /** Run `fn` and return the w:id values of the insertions/deletions it created (links UI items to revisions). */
+  capture(fn: () => void): string[] {
+    const outer = this.captured;
+    this.captured = [];
+    try {
+      fn();
+      return this.captured;
+    } finally {
+      const ids = this.captured;
+      this.captured = outer ? [...outer, ...ids] : null;
+    }
+  }
+
   private stamp(el: Element): Element {
+    if (this.captured && (el.localName === "ins" || el.localName === "del")) this.captured.push(String(this.nextId));
     setW(el, "id", String(this.nextId++));
     setW(el, "author", this.author);
     setW(el, "date", this.localDate);
