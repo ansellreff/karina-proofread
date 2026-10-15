@@ -1,0 +1,18 @@
+# Student documents contain personal data: never commit or deploy them
+Enrollment Document_*/
+training/extracted/
+training/output/
+
+# Isolated, project-local tooling (portable Node, npm/pip caches, Python venv)
+.tools/
+.venv/
+__pycache__/
+
+# Secrets
+.env*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
