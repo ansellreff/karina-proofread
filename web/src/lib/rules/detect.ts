@@ -15,8 +15,16 @@ const TYPE_PATTERNS: [RegExp, DocType][] = [
 ];
 
 export function detectDocType(fileName: string, paras: ParaInfo[]): DocType {
-  const name = fileName.replace(/[_]+/g, " ");
+  const name = fileName.replace(/[_]+/g, " ").replace(/\.docx?$/i, "");
   for (const [re, t] of TYPE_PATTERNS) if (re.test(name)) return t;
+  // Joined words in file names: "StatementofPurpose", "PersonalStatement", "StudyPlan"
+  const squashed = name.replace(/[\s\-.()]+/g, "").toLowerCase();
+  const JOINED: [string, DocType][] = [
+    ["recommendationletter", "Recommendation Letter"], ["videoscript", "Video Script"], ["personalstatement", "Personal Statement"],
+    ["statementofpurpose", "Statement of Purpose"], ["studyplan", "Study Plan"], ["researchplan", "Study Plan"],
+    ["autobiography", "Autobiography"], ["curriculumvitae", "CV/Resume"],
+  ];
+  for (const [key, t] of JOINED) if (squashed.includes(key)) return t;
   const head = paras.filter((p) => p.text.trim()).slice(0, 4).map((p) => p.text).join("\n");
   for (const [re, t] of TYPE_PATTERNS) if (re.test(head)) return t;
   return "Unknown";

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 /** What Claude returns: Karina-style edits addressed by paragraph id ([P#]) and exact text. */
 export const ReviewSchema = z.object({
+  english_quality: z.enum(["good", "average", "weak"]),
   replacements: z.array(
     z.object({
       paragraph: z.number().int(),
@@ -40,6 +41,7 @@ const obj = (properties: Record<string, unknown>) => ({
 
 /** JSON schema for structured outputs (kept in sync with ReviewSchema). */
 export const REVIEW_JSON_SCHEMA = obj({
+  english_quality: { type: "string", enum: ["good", "average", "weak"] },
   replacements: { type: "array", items: obj({ paragraph: int, find: str, replace: str, beyond_style: bool, reason: str }) },
   insertions: {
     type: "array",

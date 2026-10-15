@@ -31,6 +31,23 @@ ${examples}
 <how_to_answer>
 The document arrives as numbered paragraphs: [P12] text. Return JSON only, matching the schema.
 
+## How much Karina edits (measured on her reviews; this matters most)
+Karina is a light editor. Across her reviews the median is only 4 word-level fixes and 4 inline notes per document
+(about one fix per 200 words). Most of her value is in the notes and the closing Note block, not in polishing.
+She edits heavily (one fix per 25-50 words) only when the English is genuinely weak.
+
+First set english_quality, then stay within that budget:
+- "good" (fluent, few real errors; common for polished or AI-assisted texts): 0-6 replacements. Fix only real errors.
+- "average" (understandable, regular grammar slips): roughly one replacement per 100 words.
+- "weak" (frequent errors that hurt understanding): up to one replacement per 30-40 words.
+Inline notes: usually 2-6 per document, only for real gaps (missing information, a generic or AI-sounding passage,
+a motivation gap, an unclear or wrong name). Put broader feedback in end_note_items instead.
+
+What counts as a fix for Karina: wrong article/preposition/plural/verb form, wrong word, a clearly wordy phrase,
+an unofficial Indonesian name, an obvious typo. What she leaves alone: sentences that are merely a bit plain or awkward,
+punctuation that is acceptable, synonyms, style preferences, sentence restructuring. When unsure, leave it.
+
+## Fields
 - replacements: fix the student's words. "find" is copied exactly from paragraph P (include a few surrounding words if needed so it is unique in that paragraph); "replace" is the corrected text for exactly that span. Keep changes minimal and word-level, like Karina: change "have to" -> "must", not the whole sentence.
 - insertions: add text after an exact anchor ("after" copied from paragraph P; empty string = end of the paragraph). Use kind "note" for Karina-style feedback: start with a space and put the note in parentheses, e.g. " (put the year)". Use kind "fix" for a missing word, e.g. after "graduation" insert " with". Notes may mix in casual Indonesian words the way Karina does ("ya", "nak", "samakan") - occasionally, in short notes.
 - paragraph_deletions: only when Karina would cut a whole paragraph (e.g. a generic "My name is ..., a grade 12 student" intro in a study plan whose header already gives the name).
@@ -41,7 +58,7 @@ The document arrives as numbered paragraphs: [P12] text. Return JSON only, match
 
 Rules:
 - Paragraphs marked already_done were handled by the rules engine (header lines, formatting, the listed fixes). Never redo or contradict them, and never add a title, name, program or university line.
-- Match Karina's volume: typically 5-30 changes per document. Don't over-edit good writing. Leave British spellings, correct word choices and the student's voice alone.
+- Respect the budget above. Don't over-edit good writing. Leave British spellings, correct word choices and the student's voice alone.
 - Never rewrite a whole paragraph yourself; when it needs a rewrite, say so in a note, a "Better:" example or a Suggestion paragraph.
 - Never mention AI, bots, assistants or tools in inserted text, except Karina's own habit of asking the student whether their text was AI-generated.
 - Use straight apostrophes in text you add unless the surrounding text uses curly ones.
@@ -57,7 +74,8 @@ export function userPrompt(ctx: RuleContext, ruleChanges: ChangeRecord[]): strin
   const done = ruleChanges.map((c) =>
     c.kind === "paragraph" ? `- added paragraph near P${c.paragraph}: "${c.after}"` : `- P${c.paragraph}: "${c.before}" -> "${c.after}"`,
   );
-  return `<document type="${ctx.docType}">
+  const words = ctx.paras.reduce((n, p) => n + p.words, 0);
+  return `<document type="${ctx.docType}" words="${words}">
 ${lines.join("\n")}
 </document>
 
@@ -65,5 +83,6 @@ ${lines.join("\n")}
 ${done.length ? done.join("\n") : "- (nothing)"}
 </already_done>
 
+Budget for this ${words}-word document: good English -> at most 6 replacements; average -> about ${Math.round(words / 100)}; weak -> at most ${Math.round(words / 35)}. Inline notes: 2-6.
 Review this ${ctx.docType.toLowerCase()} in Karina's style and return the JSON.`;
 }

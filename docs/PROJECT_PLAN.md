@@ -22,7 +22,7 @@ The flow when it's finished:
 | Layer | What it does | Cost |
 |---|---|---|
 | **Karina Rules Engine** (no AI, always on) | Formatting (Times New Roman 12, justified, 1.5 spacing), header block, end "Note:" block, small fixes Karina makes consistently, offline grammar checks that match her habits | Free |
-| **Claude layer** (AI, on/off switch) | Content-level edits in her voice: grammar in context, rewrites, cuts, inline notes, guiding questions | ~US$0.10–0.30 per document (shown before each run) |
+| **Claude layer** (AI, on/off switch) | Content-level edits in her voice: grammar in context, rewrites, cuts, inline notes, guiding questions | ~US$0.07–0.18 per document, measured (estimate shown before each run) |
 
 Every rule is checked against Karina's real edits on 6 test documents that the bot never learns from.
 
@@ -52,8 +52,8 @@ Each milestone ends with a review by Karina before the next one starts.
 |---|---|---|
 | M0 | Isolated environment and project skeleton | ✅ Done (2026-10-16) |
 | M1 | Style learning, Word tracked-changes engine, Karina Rules Engine | ✅ Done (2026-10-16) |
-| M2 | Claude layer, accuracy test (rules vs. rules + AI), token/cost estimate | 🔄 In progress |
-| M3 | Web app (local): inbox, proofreading, Word-like review editor, **restore original**, export | ⏳ |
+| M2 | Claude layer, accuracy test (rules vs. rules + AI), token/cost estimate | ✅ Done (2026-10-16): 56% recall / 58% precision, US$0.09 per doc |
+| M3 | Web app (local): inbox, proofreading, Word-like review editor, **restore original**, export | 🔄 In progress |
 | M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | ⏳ |
 | M5 | Gmail auto-intake, learning loop, PDF/CV input | ⏳ |
 

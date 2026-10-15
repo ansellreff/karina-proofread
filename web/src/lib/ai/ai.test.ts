@@ -39,6 +39,7 @@ const DOC = [
 ];
 
 const fakeReview: Review = {
+  english_quality: "average",
   replacements: [
     { paragraph: 5, find: "Initially, I worked as crew", replace: "At first, I worked as a crew member", beyond_style: false, reason: "article + Karina's 'At first'" },
     { paragraph: 5, find: "I have to record", replace: "I must record", beyond_style: false, reason: "concision" },

@@ -52,6 +52,7 @@ export interface ChangeRecord {
 
 export interface AiReport {
   model: string;
+  englishQuality: "good" | "average" | "weak";
   usage: Usage;
   costUsd: number;
   dropped: { what: string; why: string }[];
@@ -149,7 +150,7 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
     deletions = deletions.filter((d) => !anchors.has(d.para));
     const deleted = new Set(deletions.map((d) => d.para));
     edits = resolveOverlaps([...rules.edits, ...mapped.edits]).filter((e) => !deleted.has(e.para));
-    aiReport = { model: res.model, usage: res.usage, costUsd: costOf(res.usage, model), dropped: mapped.dropped };
+    aiReport = { model: res.model, englishQuality: res.review.english_quality, usage: res.usage, costUsd: costOf(res.usage, model), dropped: mapped.dropped };
   }
 
   const reviser = new Reviser(doc, identity, now);

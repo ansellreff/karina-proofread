@@ -79,7 +79,7 @@ async function main() {
       }
       if (result.ai) {
         const u = result.ai.usage;
-        console.log(`  Claude (${result.ai.model}): ${u.input_tokens} in + ${u.cache_read_input_tokens ?? 0} cache-read + ${u.cache_creation_input_tokens ?? 0} cache-write, ${u.output_tokens} out -> ${usd(result.ai.costUsd)}`);
+        console.log(`  Claude (${result.ai.model}, English rated "${result.ai.englishQuality}"): ${u.input_tokens} in + ${u.cache_read_input_tokens ?? 0} cache-read + ${u.cache_creation_input_tokens ?? 0} cache-write, ${u.output_tokens} out -> ${usd(result.ai.costUsd)}`);
         for (const d of result.ai.dropped) console.log(`  (dropped: ${d.what} - ${d.why})`);
       }
     }

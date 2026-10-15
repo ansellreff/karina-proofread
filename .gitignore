@@ -3,6 +3,7 @@ Enrollment Document_*/
 training/extracted/
 training/output/
 training/holdout.txt
+training/validation.txt
 
 # Isolated, project-local tooling (portable Node, npm/pip caches, Python venv)
 .tools/

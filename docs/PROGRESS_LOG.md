@@ -85,7 +85,7 @@ All outputs open cleanly in desktop Word, with every revision by Karina Octavia.
 
 ---
 
-## M2 — Claude layer, accuracy test, cost estimate 🔄
+## M2 — Claude layer, accuracy test, cost estimate ✅
 **2026-10-16**
 
 ### Before starting M2 (from the M1 review)
@@ -115,4 +115,41 @@ All outputs open cleanly in desktop Word, with every revision by Karina Octavia.
   (never committed) before any commit, and the template was blanked.
 - The key is user-level and not attached to a workspace, so the API asked for a workspace ID. Fix options:
   create a key inside a workspace (recommended, and that's where the spend limit is set), or add `ANTHROPIC_WORKSPACE_ID`.
-  Waiting for this before running the accuracy test.
+  Karina fixed the key; the free token count then confirmed it works.
+
+### Accuracy test (6 test documents, compared with Karina's real edits)
+**First attempt (prompt v1):** found 70% of Karina's edits, but only 38% of the bot's edits matched hers. Claude was editing
+**2.7× as much as Karina**: it polished sentences she would leave alone and added many more inline notes.
+
+**What Karina actually does:** the median across her reviews is only **4 word fixes and 4 inline notes per document**
+(about 1 fix per 200 words). She edits heavily only when the English is genuinely weak. Most of her feedback goes into the end note.
+
+**Prompt v2:** Claude first rates the English (good / average / weak), then keeps to Karina's edit budget for that level,
+fixes only clear errors, and saves broader feedback for the end note. v2 was tuned on 6 *training* documents, so the
+test documents were used only for the final score. (Caveat: the v1 test result is what showed the volume problem.)
+
+| | Rules only | Claude v1 | **Claude v2 (final)** |
+|---|---|---|---|
+| Karina's edits the bot also made | 35% | 70% | **56%** |
+| Bot edits Karina also made | 79% | 38% | **58%** |
+| Balance (F1) | 48% | 49% | **57%** (best) |
+| Same wording as Karina | 6% | 16% | 15% |
+| Whole-paragraph cuts found | 40% | 100% | 80% |
+| End "Note:" block | 90% | 100% | 100% |
+| Cost per document | free | US$0.16 | **US$0.09** |
+
+Notes on the numbers:
+- Word-level agreement stays modest (15% identical wording), because there are many valid ways to fix the same sentence.
+  The M3 review editor keeps Karina in control of every change.
+- The cost estimate shown before a run (e.g. US$0.08–0.25) correctly brackets the real cost (US$0.07–0.18).
+- Prompt caching works: after the first document, Karina's rulebook is read from cache at a tenth of the price.
+- Total API spend for all M2 testing: about **US$2.40**.
+
+### New sample documents (from "Enrollment Document_Not Checked")
+- The 3 Word files (an essay, an SOP and a study plan) were proofread with rules + Claude v2 for Karina's review.
+  Cost US$0.08–0.10 each.
+- The 2 PDFs are kept for M5 (PDF input).
+- Found and fixed: a file named `StatementofPurpose_…` (words joined, no spaces) wasn't recognised as an SOP. Detection now handles joined words.
+- All outputs open cleanly in desktop Word. Every change is by Karina Octavia, and nothing in the files mentions AI/bot/Claude.
+
+**Review files:** `training/output/review/M2_AI_*.docx`

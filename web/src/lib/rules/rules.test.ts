@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { detectDocType } from "./detect";
 import { headerBlock } from "./header";
 import { INLINE_RULES } from "./inline";
 import type { DocType, ParaInfo, RuleContext } from "./types";
@@ -65,6 +66,15 @@ describe("Karina inline rules", () => {
   it("adds (put the year) to resume lines with a duration but no year", () => {
     expect(apply("Digital Marketing Intern | Real Estate | 6 Months", "CV/Resume")).toBe("Digital Marketing Intern | Real Estate | 6 Months (put the year)");
     expect(apply("Retail staff | Shop | 2024 – 1 year", "CV/Resume")).toBe("Retail staff | Shop | 2024 – 1 year");
+  });
+});
+
+describe("document type detection", () => {
+  it("handles joined words and underscores in file names", () => {
+    expect(detectDocType("StatementofPurpose_TSE NTHU_Someone.docx", [])).toBe("Statement of Purpose");
+    expect(detectDocType("StudyPlan_(NAME) NYUST.docx", [])).toBe("Study Plan");
+    expect(detectDocType("DONE_X_Autobio_20261011.docx", [])).toBe("Autobiography");
+    expect(detectDocType("X_Personal Statement.docx", [])).toBe("Personal Statement");
   });
 });
 

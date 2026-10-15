@@ -8,6 +8,11 @@ so every edit is placed on that common text and compared by location.
 
 Usage:
   python training/eval.py --bot training/output/bot_rules [--label "Rules only"] [--json out.json]
+  python training/eval.py --set validation --prepare     # write reject-all originals for the tuning set
+  python training/eval.py --set validation --bot <dir>   # score on the tuning set (training docs, for prompt tuning)
+
+Sets: "holdout" (the 6 test documents, final scores only) and "validation" (6 training documents listed in
+training/validation.txt, gitignored, used for tuning so the hold-out score stays honest).
 """
 from __future__ import annotations
 
@@ -76,17 +81,40 @@ def exact(a: Unit, b: Unit) -> bool:
     return overlaps(a, b) and norm(a.before) == norm(b.before) and norm(a.after) == norm(b.after)
 
 
+def doc_set(name: str) -> tuple[set[str], Path]:
+    if name == "holdout":
+        return HOLDOUT, ROOT / "training" / "output" / "holdout_originals"
+    listing = ROOT / "training" / "validation.txt"
+    docs = {l.strip() for l in listing.read_text(encoding="utf8").splitlines() if l.strip()}
+    overlap = docs & HOLDOUT
+    if overlap:
+        raise SystemExit(f"validation set must not contain hold-out documents: {overlap}")
+    return docs, ROOT / "training" / "output" / "validation_originals"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bot", required=True)
+    ap.add_argument("--bot")
+    ap.add_argument("--set", default="holdout", choices=["holdout", "validation"])
+    ap.add_argument("--prepare", action="store_true")
     ap.add_argument("--label", default="")
     ap.add_argument("--json")
     args = ap.parse_args()
+    docs, originals = doc_set(args.set)
+    if args.prepare:
+        from revlib import reject_all
+        originals.mkdir(parents=True, exist_ok=True)
+        for name in sorted(docs):
+            reject_all(KARINA / name, originals / name)
+        print(f"wrote {len(docs)} originals to {originals}")
+        return
+    if not args.bot:
+        raise SystemExit("--bot is required")
     bot_dir = Path(args.bot)
 
     rows, cats, per_rule = [], {}, {}
     tot = {"k": 0, "b": 0, "k_hit": 0, "b_hit": 0, "exact": 0, "fmt_agree": 0, "fmt_total": 0}
-    for name in sorted(HOLDOUT):
+    for name in sorted(docs):
         k_units, _ = units(KARINA / name)
         b_path = bot_dir / name
         if not b_path.exists():
@@ -105,7 +133,7 @@ def main() -> None:
             c["bot_matched"] += b in b_hit
         sidecar = b_path.with_name(b_path.stem + ".changes.json")
         if sidecar.exists():
-            orig = ROOT / "training" / "output" / "holdout_originals" / name
+            orig = originals / name
             _, starts = doc_original_text(read_paragraphs(orig))
             for ch in json.loads(sidecar.read_text(encoding="utf8")):
                 s = starts[ch["paragraph"]] + ch["start"]
@@ -128,7 +156,7 @@ def main() -> None:
     recall = tot["k_hit"] / max(1, tot["k"])
     precision = tot["b_hit"] / max(1, tot["b"])
     f1 = 2 * recall * precision / max(1e-9, recall + precision)
-    print(f"\n=== {args.label or bot_dir.name} — hold-out documents: {len(rows)} ===")
+    print(f"\n=== {args.label or bot_dir.name} — {args.set} documents: {len(rows)} ===")
     print(f"{'document':42} {'Karina':>6} {'bot':>5} {'recall':>7} {'precis.':>7} {'exact':>5}  format")
     for r in rows:
         print(f"{r['doc'][:42]:42} {r['karina']:6} {r['bot']:5} {r['recall']:7.0%} {r['precision']:7.0%} {r['exact']:5}  {r['format_agree']}")
