@@ -21,9 +21,22 @@ interface DocApi {
   selection?: { current?: AnyFn };
   query?: { match?: AnyFn };
   replace?: AnyFn;
+  history?: { get?: AnyFn; undo?: AnyFn };
+}
+type ScrollResult = { success?: boolean } | undefined;
+interface UiLike {
+  trackChanges?: {
+    setActive?: (id: string | null) => boolean;
+    scrollTo?: (id: string) => Promise<ScrollResult>;
+    subscribe?: (fn: (e: { snapshot: { activeId?: string | null } }) => void) => () => void;
+    getAt?: (p: { x: number; y: number }) => { id?: string } | null;
+  };
+  selection?: { apply?: (target: unknown) => unknown };
+  viewport?: { scrollIntoView?: (input: Record<string, unknown>) => Promise<ScrollResult> };
 }
 interface SuperDocLike {
   activeEditor?: { doc?: DocApi } | null;
+  ui?: UiLike;
   setDocumentMode?: (m: string) => void;
   export?: (o: Record<string, unknown>) => Promise<Blob>;
   scrollToElement?: (id: string) => Promise<boolean>;
@@ -81,6 +94,31 @@ export async function decide(sd: unknown, decision: "accept" | "reject", ids: st
   }
 }
 
+/** Number of undo steps in the editor's history (null when unavailable). Each decide() call is one step. */
+export async function undoDepth(sd: unknown): Promise<number | null> {
+  try {
+    const h = (await docOf(sd)?.history?.get?.()) as { undoDepth?: number } | undefined;
+    return typeof h?.undoDepth === "number" ? h.undoDepth : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Undo the last `steps` editor history steps. */
+export async function undoSteps(sd: unknown, steps: number): Promise<boolean> {
+  const history = docOf(sd)?.history;
+  if (!history?.undo) return false;
+  try {
+    for (let i = 0; i < steps; i++) {
+      const r = (await history.undo()) as { noop?: boolean } | undefined;
+      if (r?.noop) return i > 0;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function countComments(sd: unknown): Promise<number> {
   try {
     const res = (await docOf(sd)?.comments?.list?.({})) as { items?: unknown[]; total?: number } | undefined;
@@ -131,10 +169,68 @@ export async function exportDocx(sd: unknown): Promise<Blob> {
   return s.export({ exportType: ["docx"], triggerDownload: false, commentsType: "external", isFinalDoc: false });
 }
 
-export async function scrollTo(sd: unknown, id: string) {
+/** Scroll the document to a tracked change and mark it active (SuperDoc highlights it). */
+export async function focusTracked(sd: unknown, id: string): Promise<boolean> {
+  const tc = sdOf(sd)?.ui?.trackChanges;
   try {
-    await sdOf(sd)?.scrollToElement?.(id);
+    tc?.setActive?.(id);
+    if ((await tc?.scrollTo?.(id))?.success) return true;
+  } catch {
+    /* fall through */
+  }
+  try {
+    return !!(await sdOf(sd)?.scrollToElement?.(id));
+  } catch {
+    return false;
+  }
+}
+
+/** Scroll to and select the first occurrence of `text` (for changes already accepted or rejected). */
+export async function focusText(sd: unknown, text: string): Promise<boolean> {
+  const s = sdOf(sd);
+  const match = s?.activeEditor?.doc?.query?.match;
+  if (!match || !s?.ui) return false;
+  try {
+    const res = (await match({ select: { type: "text", pattern: text, mode: "contains", caseSensitive: true } })) as {
+      items?: { target?: unknown; blocks?: { blockId: string; range: unknown }[] }[];
+    };
+    const hit = res.items?.[0];
+    const block = hit?.blocks?.[0];
+    if (!hit || !block) return false;
+    s.ui.selection?.apply?.(hit.target);
+    const r = await s.ui.viewport?.scrollIntoView?.({ target: { kind: "text", blockId: block.blockId, range: block.range }, block: "center" });
+    return !!r?.success;
+  } catch {
+    return false;
+  }
+}
+
+/** Mark the tracked change painted under a click point as active (clicking text alone does not). */
+export function activateTrackedAt(sd: unknown, x: number, y: number): string | null {
+  const tc = sdOf(sd)?.ui?.trackChanges;
+  try {
+    const id = tc?.getAt?.({ x, y })?.id;
+    if (!id) return null;
+    tc?.setActive?.(id);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+export function clearActiveTracked(sd: unknown) {
+  try {
+    sdOf(sd)?.ui?.trackChanges?.setActive?.(null);
   } catch {
     /* ignore */
+  }
+}
+
+/** Follow the active tracked change (set by clicking a change in the document or by focusTracked). */
+export function onActiveTracked(sd: unknown, cb: (id: string | null) => void): () => void {
+  try {
+    return sdOf(sd)?.ui?.trackChanges?.subscribe?.(({ snapshot }) => cb(snapshot.activeId ?? null)) ?? (() => {});
+  } catch {
+    return () => {};
   }
 }

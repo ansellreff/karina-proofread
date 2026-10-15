@@ -223,3 +223,39 @@ can undo anything (including returning to the original), and exports DOCX or PDF
   (e.g. a middle name). Editing the name in the app is a small follow-up.
 - PDF goes through the browser's "Save as PDF" until M4 adds OneDrive's Word-quality conversion.
 - Everything is local for now (files are kept in `web/.data`, gitignored). OneDrive, sign-in and Vercel come in M4.
+
+## M3 review feedback (2026-10-16)
+
+Karina's requests after trying the review screen:
+
+1. **"Each change in the What changed panel should take me to its place in the document."**
+   - Clicking a card now scrolls the document to that change and highlights it. Previous/next arrows step through the
+     list (following the current filter), with a "3/12" position counter.
+   - It works both ways: clicking a change inside the document highlights its card in the panel.
+   - Changes that were already accepted or rejected are found by their remaining text.
+   - Phone: tapping a card closes the panel so the change is visible, and ↑/↓ arrows next to the "changes" button
+     step through changes without opening the panel.
+   - Cause of the old behaviour: the editor call the panel used ("scroll to element") silently did nothing for tracked
+     changes. It now uses SuperDoc's dedicated tracked-change navigation.
+2. **"After I reject a change I cannot undo it; it should be undoable in case of a misclick."**
+   - Every accept/reject from the panel shows a message with an **Undo** button.
+   - The greyed-out card itself shows **Undo reject** / **Undo accept** where the Accept/Reject buttons were, and says
+     whether it was accepted or rejected. If later decisions were made after it, the card says so ("also undoes 1
+     later decision"), because undo goes back in order.
+   - An **Undo** button at the top of the panel steps back one decision at a time, including "Accept all",
+     "Reject all" and "Restore removed text".
+   - Safety: if Karina has typed in the document since that decision, the app does not undo (that would remove her
+     typing first) and points to Ctrl+Z instead.
+
+### Found and fixed along the way
+- **Phone: the review panel could not scroll.** It grew taller than the screen, so changes lower in the list could not
+  be reached. Fixed (the panel is now 75% of the screen height and scrolls).
+- **Phone: tracked changes had no colours.** In the phone (reflowed) layout, inserted and deleted text looked like
+  normal text because the editor only styles its page layout. Added the same blue (inserted) and red struck-through
+  (deleted) markup, plus an outline on the active change.
+
+### Verified
+- End-to-end browser check extended to **26/26**: the new checks cover undo from the message, undo on the rejected
+  card, undo of "Accept all", jump to a change, the next arrow, and clicking a change in the document.
+- Phone layout checked separately: tap a card → panel closes, the document scrolls to the change, which is outlined.
+- 28 unit tests, lint and type check pass.

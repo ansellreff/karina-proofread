@@ -98,6 +98,55 @@ const after2 = await waitChange(after);
 check("reject one item resolves only that item", after2 !== after && !/^0 of/.test(after2 ?? ""), `${after} -> ${after2}`);
 await page.screenshot({ path: path.join(out, "02b-after-accept-reject.png") });
 
+// 4b. undo a panel decision (misclick safety)
+const trackedBeforeMisclick = (await listTracked())?.total;
+await panel.getByRole("button", { name: "Reject", exact: true }).first().click({ force: true });
+const afterMisclick = await waitChange(after2);
+await page.locator("[data-sonner-toast]").getByRole("button", { name: "Undo" }).first().click();
+const afterToastUndo = await waitChange(afterMisclick);
+check("undo from the toast brings a rejected change back", afterMisclick !== after2 && afterToastUndo === after2 && (await listTracked())?.total === trackedBeforeMisclick, `${after2} -> ${afterMisclick} -> ${afterToastUndo}`);
+await panel.getByRole("button", { name: "Reject", exact: true }).first().click({ force: true });
+const afterReject2 = await waitChange(afterToastUndo);
+// the earlier rejected formatting card also offers "Undo reject" (and says it would undo this later one too)
+const cardUndo = panel.locator("li").filter({ hasNotText: "also undoes" }).getByRole("button", { name: "Undo reject" });
+const cardUndoShown = (await cardUndo.count()) === 1 && (await panel.getByText(/also undoes 1 later decision/).count()) === 1;
+await cardUndo.first().click();
+const afterCardUndo = await waitChange(afterReject2);
+check("rejected card shows its own Undo button that brings it back", cardUndoShown && afterReject2 !== afterToastUndo && afterCardUndo === afterToastUndo, `${afterToastUndo} -> ${afterReject2} -> ${afterCardUndo}`);
+await panel.getByRole("button", { name: "Accept all" }).click();
+const afterAll = await waitChange(afterToastUndo);
+await panel.getByRole("button", { name: "Undo", exact: true }).click();
+const afterAllUndo = await waitChange(afterAll);
+check("undo in the panel reverses Accept all", /^0 of/.test(afterAll ?? "") && afterAllUndo === after2, `${afterAll} -> ${afterAllUndo}`);
+
+// 4c. click a change in the panel -> the document scrolls to it
+const docScroll = () => page.evaluate(() => document.querySelector(".superdoc__sub-document")?.scrollTop ?? -1);
+await page.evaluate(() => { const s = document.querySelector(".superdoc__sub-document"); if (s) s.scrollTop = 0; });
+const cards = panel.locator("li[data-change-key]");
+const lastCard = cards.nth((await cards.count()) - 1);
+await lastCard.locator("button").first().click();
+await page.waitForTimeout(1200);
+const jumped = await docScroll();
+check("clicking a change scrolls the document to it", jumped > 300 && (await lastCard.getAttribute("aria-current")) === "true", `scrollTop ${jumped}`);
+const lastKey = await lastCard.getAttribute("data-change-key");
+await panel.getByRole("button", { name: "Next change" }).click();
+await page.waitForTimeout(1000);
+const firstActive = await panel.locator("li[aria-current]").getAttribute("data-change-key").catch(() => null);
+const counter = (await panel.getByText(/^\d+\/\d+$/).first().textContent().catch(() => "")) ?? "";
+check("Next change wraps to the first change", !!firstActive && firstActive !== lastKey && counter.startsWith("1/"), `active ${firstActive}, ${counter}`);
+// clicking tracked text in the document highlights its card (go to the last change, then click inserted text on screen)
+await lastCard.locator("button").first().click();
+await page.waitForTimeout(1200);
+const insert = page.locator(".superdoc-page .track-insert-dec").filter({ hasText: /\w{4}/ }).last();
+const snippet = ((await insert.textContent().catch(() => "")) ?? "").trim().slice(0, 15);
+await panel.getByRole("button", { name: "Next change" }).click(); // move the highlight away first
+await page.waitForTimeout(1000);
+await insert.click();
+await page.waitForTimeout(1000);
+const activeText = (await panel.locator("li[aria-current]").textContent().catch(() => "")) ?? "";
+check("clicking a change in the document highlights it in the panel", !!snippet && activeText.includes(snippet), `clicked "${snippet}", active card: "${activeText.slice(0, 60)}"`);
+await page.screenshot({ path: path.join(out, "02d-jump-to-change.png") });
+
 // 5. save as a new version
 await page.getByRole("button", { name: /^Save$/ }).click();
 await page.waitForTimeout(2500);

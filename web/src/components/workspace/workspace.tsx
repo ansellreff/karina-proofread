@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, Download, FileCheck2, ListChecks, Loader2, MessageSquareText, Save, ScanText, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Download, FileCheck2, ListChecks, Loader2, MessageSquareText, Save, ScanText, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,10 +12,26 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/lib/store/types";
-import { ChangesPanel, type PanelChange } from "./changes-panel";
+import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
-import { countComments, decide, exportDocx, listTracked, scrollTo, selectedText, setMode as sdSetMode, trackedReplace, type TrackedItem } from "./superdoc-api";
+import {
+  activateTrackedAt,
+  clearActiveTracked,
+  countComments,
+  decide,
+  exportDocx,
+  focusText,
+  focusTracked,
+  listTracked,
+  onActiveTracked,
+  selectedText,
+  setMode as sdSetMode,
+  trackedReplace,
+  undoDepth,
+  undoSteps,
+  type TrackedItem,
+} from "./superdoc-api";
 import { usePhone } from "./use-phone";
 import { VersionsPanel } from "./versions-panel";
 
@@ -39,7 +55,19 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
 ];
 
 const AUTOSAVE_MS = 90_000;
+
+/** One accept/reject made from the panel: how many editor history steps it took and which cards it resolved. */
+interface Decision {
+  decision: "accept" | "reject";
+  label: string;
+  keys: string[];
+  steps: number;
+  /** Editor undo depth right after it; if the depth differs later, Karina edited the document since. */
+  depthAfter: number;
+}
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+/** First non-empty line, short enough for a text search. */
+const searchable = (s: string) => (s.split("\n").map((l) => l.trim()).find(Boolean) ?? "").slice(0, 80);
 
 export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string }) {
   const [job, setJob] = useState(initialJob);
@@ -64,6 +92,19 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     setShown(n);
   }, []);
   const sd = useRef<unknown>(null);
+  /** Tracked change highlighted in the editor (clicked in the document or jumped to from the panel). */
+  const [activeId, setActiveId] = useState<string | null>(null);
+  /** Panel item last jumped to; used when it has no live tracked change (already accepted or rejected). */
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const unfollow = useRef<() => void>(() => {});
+  /** Accept/reject decisions made from the panel, newest last, so a misclick can be undone. */
+  const [decisions, setDecisionsState] = useState<Decision[]>([]);
+  const decisionsRef = useRef<Decision[]>([]); // read by toast callbacks, which outlive renders
+  const setDecisions = (d: Decision[]) => {
+    decisionsRef.current = d;
+    setDecisionsState(d);
+  };
+  const resetDecisions = () => setDecisions([]);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasBotVersion = job.versions.some((v) => v.kind === "bot");
@@ -133,6 +174,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   useEffect(() => () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    unfollow.current();
   }, []);
 
   useEffect(() => {
@@ -168,14 +210,77 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   }, [job.proofread, shown, tracked, authorName]);
   const linked = new Set(panelChanges.flatMap((c) => c.live.map((t) => t.id)));
   const otherOpen = tracked.filter((t) => !linked.has(t.id)).length;
+  const activeKey = activeId ? (panelChanges.find((c) => c.live.some((t) => t.id === activeId))?.key ?? null) : pickedKey;
 
-  const apply = async (decision: "accept" | "reject", items: PanelChange[]) => {
+  /** Scroll the document to a change from the panel and highlight it there. */
+  const focusChange = async (c: PanelChange) => {
+    setPickedKey(c.key);
+    if (phone) setSheetOpen(false); // the sheet would cover the document
+    let found = false;
+    if (c.live[0]) found = await focusTracked(sd.current, c.live[0].id);
+    else {
+      clearActiveTracked(sd.current);
+      setActiveId(null);
+    }
+    if (!c.live[0] && c.kind !== "format") {
+      // resolved: look for the text that stayed (accepted -> new text, rejected -> old text)
+      for (const text of [c.after, c.before].map(searchable).filter((t) => t.length >= 3)) {
+        if ((found = await focusText(sd.current, text))) break;
+      }
+    }
+    if (!found) toast(c.live.length ? "Could not scroll to this change." : "This change is already resolved and its text is no longer in the document.");
+  };
+
+  /** Phone: step through all changes without opening the panel. */
+  const stepAll = (dir: 1 | -1) => {
+    const stops = panelChanges.filter(canLocate);
+    if (!stops.length) return;
+    const at = stops.findIndex((c) => c.key === activeKey);
+    const next = at < 0 ? (dir === 1 ? 0 : stops.length - 1) : (at + dir + stops.length) % stops.length;
+    void focusChange(stops[next]);
+  };
+
+  const apply = async (decision: "accept" | "reject", items: PanelChange[], label: string) => {
     const ids = items.flatMap((c) => c.live.map((t) => t.id));
     if (!ids.length) return;
+    const before = await undoDepth(sd.current);
     if (!(await decide(sd.current, decision, ids))) toast.error("That change could not be updated in the editor.");
+    const after = await undoDepth(sd.current);
     setDirty(true);
     refresh();
+    if (before !== null && after !== null && after > before) {
+      const next = [...decisionsRef.current, { decision, label, keys: items.map((c) => c.key), steps: after - before, depthAfter: after }].slice(-50);
+      setDecisions(next);
+      const index = next.length - 1;
+      toast(label, { action: { label: "Undo", onClick: () => void undoDecision(index) } });
+    }
   };
+
+  /**
+   * Undo panel decision `index` (default: the latest) and any made after it, through the editor's history.
+   * Refuses when Karina has edited the document since: history undo would take her typing back first.
+   */
+  async function undoDecision(index?: number) {
+    const list = decisionsRef.current;
+    const i = index ?? list.length - 1;
+    if (i < 0 || i >= list.length) return;
+    if ((await undoDepth(sd.current)) !== list[list.length - 1].depthAfter) {
+      resetDecisions();
+      return toast("The document was edited after that. Use Ctrl+Z or the undo arrow in the toolbar to step back.");
+    }
+    const undone = list.slice(i);
+    setDecisions(list.slice(0, i));
+    const ok = await undoSteps(sd.current, undone.reduce((n, d) => n + d.steps, 0));
+    setDirty(true);
+    refresh();
+    const later = undone.length - 1;
+    if (ok) toast.success(`Undone: ${undone[0].label.toLowerCase()}${later ? `, plus ${later} later decision${later === 1 ? "" : "s"}` : ""}`);
+    else toast.error("That could not be undone. Try Ctrl+Z in the document.");
+  }
+
+  /** For each resolved card decided in this session: its decision and how many later decisions an undo would also take back. */
+  const undoable = new Map<string, { decision: Decision["decision"]; index: number; later: number }>();
+  decisions.forEach((d, index) => d.keys.forEach((k) => undoable.set(k, { decision: d.decision, index, later: decisions.length - 1 - index })));
 
   const [rechecking, setRechecking] = useState(false);
   async function recheckSelection() {
@@ -263,12 +368,17 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           <ChangesPanel
             changes={panelChanges}
             otherOpen={otherOpen}
-            onAccept={(c) => apply("accept", [c])}
-            onReject={(c) => apply("reject", [c])}
-            onAcceptAll={() => apply("accept", panelChanges)}
-            onRejectAll={() => apply("reject", panelChanges)}
-            onRestoreRemoved={(items) => apply("reject", items)}
-            onFocus={(c) => c.live[0] && scrollTo(sd.current, c.live[0].id)}
+            onAccept={(c) => apply("accept", [c], "Change accepted")}
+            onReject={(c) => apply("reject", [c], c.before ? "Change rejected, original text restored" : "Change rejected")}
+            onAcceptAll={() => apply("accept", panelChanges, "All changes accepted")}
+            onRejectAll={() => apply("reject", panelChanges, "All changes rejected")}
+            onRestoreRemoved={(items) => apply("reject", items, "Removed text restored")}
+            undoLabel={decisions.at(-1)?.label ?? null}
+            onUndo={() => void undoDecision()}
+            undoable={undoable}
+            onUndoAt={(index) => void undoDecision(index)}
+            onFocus={focusChange}
+            activeKey={activeKey}
           />
         ) : (
           <div className="space-y-3 px-4 py-6 text-sm text-muted-foreground">
@@ -367,7 +477,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50">
+        <div className="relative min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50" onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
+          {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
+          {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
           {editorError ? (
             <EditorPlaceholder text={editorError} />
           ) : file ? (
@@ -380,6 +492,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               onReady={(s) => {
                 sd.current = s;
                 if (process.env.NODE_ENV !== "production") (window as unknown as { __superdoc?: unknown }).__superdoc = s; // e2e checks
+                unfollow.current();
+                unfollow.current = onActiveTracked(s, setActiveId);
+                resetDecisions();
                 sdSetMode(s, mode);
                 refresh();
                 setDirty(false);
@@ -395,13 +510,23 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       </div>
 
       {/* phone / tablet: panel as a bottom sheet */}
-      <div className="no-print fixed inset-x-0 bottom-4 z-30 flex justify-center lg:hidden">
+      <div className="no-print fixed inset-x-0 bottom-4 z-30 flex justify-center gap-1.5 lg:hidden">
+        {panelChanges.length > 0 && (
+          <Button size="icon" variant="outline" className="bg-card shadow-lg" onClick={() => stepAll(-1)} aria-label="Previous change">
+            <ChevronUp />
+          </Button>
+        )}
         <Button className="shadow-lg" onClick={() => setSheetOpen(true)}>
           {tab === "versions" ? <ListChecks /> : <MessageSquareText />} {panelChanges.length ? `${panelChanges.length} changes` : "Review panel"}
         </Button>
+        {panelChanges.length > 0 && (
+          <Button size="icon" variant="outline" className="bg-card shadow-lg" onClick={() => stepAll(1)} aria-label="Next change">
+            <ChevronDown />
+          </Button>
+        )}
       </div>
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom" className="h-[75dvh] gap-0 p-0">
+        <SheetContent side="bottom" className="gap-0 p-0 data-[side=bottom]:h-[75dvh]">
           <SheetTitle className="sr-only">Review panel</SheetTitle>
           {panel}
         </SheetContent>

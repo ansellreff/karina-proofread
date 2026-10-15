@@ -94,6 +94,29 @@
   background: linear-gradient(transparent 55%, color-mix(in srgb, var(--mark) 85%, transparent) 55%);
 }
 
+/* SuperDoc's web (phone) layout ships no tracked-change styles; mirror its page layout's markup. */
+.superdoc-web-flow-run.track-insert-dec.highlighted {
+  border-block: 1px dashed var(--sd-tracked-changes-insert-border, #1f6feb);
+  background: color-mix(in srgb, var(--sd-tracked-changes-insert-border, #1f6feb) 13%, transparent);
+}
+.superdoc-web-flow-run.track-delete-dec.highlighted {
+  border-block: 1px dashed var(--sd-tracked-changes-delete-border, #cb0e47);
+  background: color-mix(in srgb, var(--sd-tracked-changes-delete-border, #cb0e47) 13%, transparent);
+  text-decoration: line-through var(--sd-tracked-changes-delete-border, #cb0e47);
+}
+.superdoc-web-flow-run.track-insert-dec.highlighted.track-change-focused {
+  border-block-style: solid;
+  background: color-mix(in srgb, var(--sd-tracked-changes-insert-border, #1f6feb) 30%, transparent);
+}
+.superdoc-web-flow-run.track-delete-dec.highlighted.track-change-focused {
+  border-block-style: solid;
+  background: color-mix(in srgb, var(--sd-tracked-changes-delete-border, #cb0e47) 30%, transparent);
+}
+.superdoc-web-flow-run.track-insert-dec.hidden,
+.superdoc-web-flow-run.track-delete-dec.hidden {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
