@@ -12,6 +12,17 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `training/` — Python scripts that mine Karina's tracked changes from the training documents.
 - `Enrollment Document_*` — student documents with personal data. **Gitignored; never commit, deploy, or quote real names in prompts/examples.**
 
+## Commands (after `. .\dev.ps1`)
+- `python training\extract_revisions.py` — mine Karina's tracked changes → `training/extracted/` (+ hold-out originals)
+- `cd web; npm run proofread -- <file|folder> [--out dir] [--no-grammar]` — Karina-style tracked-changes docx (rules engine, no AI)
+- `python training\eval.py --bot <dir>` — score bot output vs Karina's real edits on the 6 hold-out docs (never tune rules on them)
+- `cd web; npm test` — docx writer + rules unit tests
+
+## Engine
+- `web/src/lib/docx/` — OOXML engine (accept/reject, tracked insert/delete/format, Word-exact metadata). Element order in rPr/pPr matters (Word rejects out-of-order).
+- `web/src/lib/rules/` — Karina Rules Engine. Every rule is backed by measured precision on her data; Harper limited to kinds that match her.
+- `web/prompts/karina-style-guide.md` — her rulebook (anonymised), used by the AI layer in M2.
+
 ## Output rules
 - Tracked changes and comments are authored `Karina Octavia`; no bot/AI trace in the docx or its metadata.
 - Karina's notes to students are tracked inline insertions in parentheses, not Word comments.
