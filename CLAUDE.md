@@ -2,6 +2,10 @@
 
 Private web app that proofreads student enrollment documents (study plans, autobiographies, CVs, SOPs…) in Karina Octavia's personal review style. Plan and milestones: `C:\Users\reffr\.claude\plans\tingly-meandering-scott.md`.
 
+## Tracking (Karina reads these to follow the project)
+- `docs/PROJECT_PLAN.md`: plan, decisions, milestone status. Update when a decision or scope changes.
+- `docs/PROGRESS_LOG.md`: append what was built, found and decided at each milestone step, in plain language. No student names.
+
 ## Environment (isolated — nothing installed on Windows)
 - Always start a shell with `. .\dev.ps1` from the repo root. It puts portable Node (`.tools/node`) and the Python venv (`.venv`) on PATH for that session only and keeps npm/pip caches in `.tools/`.
 - Never `npm install -g` or `pip install` outside `.venv`.

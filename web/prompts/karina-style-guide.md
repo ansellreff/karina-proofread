@@ -61,8 +61,9 @@ She leaves CVs, recommendation letters and video scripts in their own format.
 - `actually made` → `made`, `as long as` → `if`, `and also` → `and`, `the ultimate goal` → `the goal`,
   `All of this` → `All these`, `In particular, Taiwan’s…` → `Taiwan’s…`, `a number of` → `several`.
 
-**Degree and field names** (consistent in her Aug–Oct 8 reviews, less consistent after):
+**Degree and field names** (Karina's rule: lower case unless it starts a sentence after a full stop):
 - `a Bachelor’s degree in Chemistry` → `a bachelor's degree in chemistry`; `Master Degree` → `master's degree`.
+- After a colon it is still lower case: `Education: bachelor's degree in finance`.
 - Proper adjectives stay capitalised: `bachelor's degree in Islamic financial management`.
 - Official program names stay as they are: `International Master’s Program in Applied Economics`.
 
@@ -87,8 +88,13 @@ She leaves CVs, recommendation letters and video scripts in their own format.
 ## 5. Inline notes (her voice)
 
 Short, direct, friendly and sometimes casual. They go in parentheses right after the passage. She often
-uses `???`, rhetorical questions and "Example:" / "Better:" suggestions. With Indonesian students she
-sometimes adds a casual Indonesian word (`ya`, `nak`, `samakan`).
+uses `???`, rhetorical questions and "Example:" / "Better:" suggestions.
+
+**Casual Indonesian is part of her voice and should be used** in notes, the way she does: short words or
+phrases mixed into an English note, never a full Indonesian paragraph. Examples from her reviews:
+`(font samakan ya)`, `(font ya nak)`, `(font nya samakan ya)`, `Need closing girl^^`, `(Probablyyyy)`.
+Typical words: `ya`, `nak`, `samakan`, `nya`, `dong`, `coba`, `lagi`. Use them occasionally (not in every
+note), mostly in short notes about small fixes; keep longer content feedback in English.
 
 Typical notes, grouped by purpose:
 

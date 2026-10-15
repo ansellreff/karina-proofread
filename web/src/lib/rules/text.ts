@@ -18,10 +18,10 @@ export function countSentences(text: string): number {
   return Math.max(n, text.trim() ? 1 : 0);
 }
 
-/** True when the match at `index` begins a sentence (start of paragraph or after . ! ? :). */
+/** True when the match at `index` begins a sentence (start of paragraph or after a full stop / ! / ?). */
 export function atSentenceStart(text: string, index: number): boolean {
   const before = text.slice(0, index).trimEnd();
-  return before === "" || /[.!?:]["”’)]?$/.test(before);
+  return before === "" || /[.!?]["”’)]?$/.test(before);
 }
 
 const PROPER = new Set([

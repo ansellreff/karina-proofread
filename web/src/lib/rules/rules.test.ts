@@ -39,6 +39,11 @@ describe("Karina inline rules", () => {
     );
   });
 
+  it("lower-cases after a colon but not after a full stop (Karina's rule)", () => {
+    expect(apply("Education: Bachelor’s degree in Finance from X.")).toBe("Education: bachelor's degree in finance from X.");
+    expect(apply("I like it. Master’s degree holders are welcome.")).toBe("I like it. Master’s degree holders are welcome.");
+  });
+
   it("does not touch an already lower-case degree or a sentence start", () => {
     expect(apply("I hold a bachelor’s degree in chemistry.")).toBe("I hold a bachelor’s degree in chemistry.");
     expect(apply("Master’s degree holders are welcome.")).toBe("Master’s degree holders are welcome.");
