@@ -378,3 +378,14 @@ While cleaning up after a crashed test, I deleted every document in the local ap
 - **Fixed a timing problem in the test itself:** it sometimes read the score before the previous update had arrived.
 - The proofreading results are still identical on all 43 local documents. 42 unit tests and lint pass.
 - The two sample PDFs from “Enrollment Document_Not Checked” are in the app, not yet proofread, so you can try the AI estimate yourself.
+
+### Fix: dragging a side didn’t work (Karina’s feedback)
+- **Cause:** the first version used the browser’s built-in drag and drop. Edge cancels such a drag when the page changes at the moment the drag starts, which happened when the drop zones appeared. The automated test had faked the drag events instead of moving a real mouse, so it missed this.
+- **Rebuilt with pointer events:**
+  - Hold the title bar of either side (anywhere except its buttons) and move. A small live picture of that page lifts up and follows the cursor, slightly tilted.
+  - The side it came from fades.
+  - The half it will land on gets a dashed outline and a label (“Original on the right”).
+  - On release, the picture glides into place and the sides swap.
+  - Escape, or dropping on the same half, leaves everything as it was.
+  - It works with a mouse, pen or touch screen.
+- **Test:** the end-to-end test now drags with real mouse input and checks that the picture appears, the target half is shown, and the sides swap. **44/44 checks pass.**

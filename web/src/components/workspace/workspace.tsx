@@ -15,7 +15,7 @@ import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import { OriginalPane } from "./original-pane";
 import { ScorePanel, scoreTone, type Scores } from "./score-panel";
-import { DropOverlay, PaneHeader, PanelResizer, SplitDivider, usePreference, type PaneView } from "./split-view";
+import { DropZones, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePreference, type PaneView } from "./split-view";
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
@@ -141,8 +141,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const [savedPanelWidth, savePanelWidth] = usePreference("panel-width", 380);
   const [livePanelWidth, setLivePanelWidth] = useState<number | null>(null); // while dragging its edge
   const panelWidth = livePanelWidth ?? savedPanelWidth;
-  const [draggedPane, setDraggedPane] = useState<"original" | "review" | null>(null);
   const swapSides = () => setOriginalSide(originalSide === "left" ? "right" : "left");
+  // drag a side by its title bar: dropping the original on a half puts it there; the review goes opposite
+  const { drag: paneDrag, handlers: paneDragHandlers } = usePaneDrag({
+    container: splitBox,
+    pane: (which) => (which === "original" ? originalPane.current : reviewPane.current),
+    onDrop: (which, side) => setOriginalSide(which === "original" ? side : side === "left" ? "right" : "left"),
+  });
   // Pages keep their zoom when a column narrows or widens (side by side, resizing, panel); fit them to the column again.
   useEffect(() => {
     if (phone) return;
@@ -664,7 +669,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               ref={originalPane}
               data-pane="original"
               data-side={sideBySide ? originalSide : undefined}
-              className={cn("flex min-h-0 min-w-0 flex-col bg-card md:bg-muted/50", sideBySide ? "shrink-0" : "absolute inset-0 z-10")}
+              className={cn("flex min-h-0 min-w-0 flex-col bg-card transition-opacity md:bg-muted/50", sideBySide ? "shrink-0" : "absolute inset-0 z-10", paneDrag?.which === "original" && "opacity-35")}
               style={sideBySide ? { order: originalSide === "left" ? 0 : 2, width: `${(originalSide === "left" ? ratio : 1 - ratio) * 100}%` } : undefined}
             >
               {sideBySide ? (
@@ -677,8 +682,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
                     changeMode(v);
                   }}
                   onSwap={swapSides}
-                  onDragStart={() => setDraggedPane("original")}
-                  onDragEnd={() => setDraggedPane(null)}
+                  drag={paneDragHandlers("original")}
                 />
               ) : (
                 <PaneLabel>Original, as received (read only). Choose Suggesting, Editing or Viewing to go back to your review.</PaneLabel>
@@ -700,7 +704,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             data-pane="review"
             data-side={sideBySide ? (originalSide === "left" ? "right" : "left") : undefined}
             aria-hidden={view === "original" || undefined}
-            className={cn("relative flex min-w-0 flex-1 flex-col", view === "original" && "invisible")}
+            className={cn("relative flex min-w-0 flex-1 flex-col transition-opacity", view === "original" && "invisible", paneDrag?.which === "review" && "opacity-35")}
             style={sideBySide ? { order: originalSide === "left" ? 2 : 0 } : undefined}
             onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
           {sideBySide && (
@@ -709,8 +713,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               value={mode as PaneView}
               onPick={(v) => (v === "original" ? swapSides() : changeMode(v))}
               onSwap={swapSides}
-              onDragStart={() => setDraggedPane("review")}
-              onDragEnd={() => setDraggedPane(null)}
+              drag={paneDragHandlers("review")}
             />
           )}
           <div className="relative min-h-0 flex-1">
@@ -744,17 +747,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           )}
           </div>
           </div>
-          {sideBySide && draggedPane && (
-            <DropOverlay
-              dragged={draggedPane}
-              onDrop={(side) => {
-                // dropping the original on a side puts it there; dropping the review puts the original opposite
-                setOriginalSide(draggedPane === "original" ? side : side === "left" ? "right" : "left");
-                setDraggedPane(null);
-              }}
-              onCancel={() => setDraggedPane(null)}
-            />
-          )}
+          {sideBySide && paneDrag && <DropZones drag={paneDrag} />}
         </div>
         {panelOpen ? (
           <aside className="relative hidden shrink-0 flex-col border-l bg-card lg:flex" style={{ width: panelWidth, maxWidth: "55vw", minWidth: 300 }}>
