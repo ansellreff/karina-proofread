@@ -147,6 +147,39 @@ const activeText = (await panel.locator("li[aria-current]").textContent().catch(
 check("clicking a change in the document highlights it in the panel", !!snippet && activeText.includes(snippet), `clicked "${snippet}", active card: "${activeText.slice(0, 60)}"`);
 await page.screenshot({ path: path.join(out, "02d-jump-to-change.png") });
 
+// 4d. compare with the original: Original view, side by side, scroll lock (the review editor must never reload)
+await page.evaluate(() => (window.__superdoc.__e2eMarker = true));
+const editorKept = () => page.evaluate(() => window.__superdoc?.__e2eMarker === true);
+const paneScroll = (p) => page.evaluate((x) => document.querySelector(`[data-pane="${x}"] .superdoc__sub-document`)?.scrollTop ?? -1, p);
+await page.getByRole("radio", { name: "Original" }).click();
+await page.waitForSelector('[data-pane="original"] .superdoc__sub-document', { timeout: 30000 });
+await page.waitForTimeout(1200);
+const originalMarks = await page.evaluate(() => document.querySelectorAll('[data-pane="original"] .track-insert-dec, [data-pane="original"] .track-delete-dec').length);
+const reviewHidden = await page.evaluate(() => getComputedStyle(document.querySelector('[data-pane="review"]')).visibility === "hidden");
+check("Original shows the uploaded file without any suggestions", originalMarks === 0 && reviewHidden, `${originalMarks} tracked marks`);
+await page.getByRole("radio", { name: "Suggesting" }).click();
+await page.getByRole("button", { name: /Side by side/ }).click();
+await page.waitForSelector('[data-pane="original"] .superdoc__sub-document', { timeout: 30000 });
+await page.waitForTimeout(1500);
+const fits = await page.evaluate(() => ["original", "review"].every((p) => {
+  const pane = document.querySelector(`[data-pane="${p}"]`).getBoundingClientRect();
+  const pg = document.querySelector(`[data-pane="${p}"] .superdoc-page`)?.getBoundingClientRect();
+  return pg && pg.left >= pane.left - 1 && pg.right <= pane.right + 1;
+}));
+check("side by side: both pages fit their column", fits);
+await page.evaluate(() => (document.querySelector('[data-pane="review"] .superdoc__sub-document').scrollTop = 900));
+await page.waitForTimeout(600);
+const lockedTop = await paneScroll("original");
+await page.getByRole("button", { name: /Scroll locked/ }).click();
+await page.evaluate(() => (document.querySelector('[data-pane="review"] .superdoc__sub-document').scrollTop = 1800));
+await page.waitForTimeout(600);
+const unlockedTop = await paneScroll("original");
+check("scroll lock moves both sides; unlocked they move alone", lockedTop > 100 && unlockedTop === lockedTop, `locked ${lockedTop}, after unlocking ${unlockedTop}`);
+await page.screenshot({ path: path.join(out, "02e-side-by-side.png") });
+await page.getByRole("button", { name: /Side by side/ }).click();
+await page.waitForTimeout(500);
+check("comparing never reloads the review editor (unsaved edits are safe)", (await editorKept()) && (await page.locator('[data-pane="original"]').count()) === 0);
+
 // 5. save as a new version
 await page.getByRole("button", { name: /^Save$/ }).click();
 await page.waitForTimeout(2500);

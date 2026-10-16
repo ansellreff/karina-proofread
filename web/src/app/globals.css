@@ -94,6 +94,13 @@
   background: linear-gradient(transparent 55%, color-mix(in srgb, var(--mark) 85%, transparent) 55%);
 }
 
+/* Side by side: SuperDoc's layer sizes itself to a full page, so in a half-width column the page is centred in a
+   box wider than the column and its right edge is cut off. Make the layer follow the column instead. */
+[data-split] .superdoc__layers {
+  width: 100%;
+  min-width: 0;
+}
+
 /* SuperDoc's web (phone) layout ships no tracked-change styles; mirror its page layout's markup. */
 .superdoc-web-flow-run.track-insert-dec.highlighted {
   border-block: 1px dashed var(--sd-tracked-changes-insert-border, #1f6feb);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Download, FileCheck2, ListChecks, Loader2, MessageSquareText, Save, ScanText, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, FileCheck2, Link2, ListChecks, Loader2, MessageSquareText, Save, ScanText, Sparkles, Unlink2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
+import { OriginalPane } from "./original-pane";
+import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
 import {
@@ -25,6 +27,7 @@ import {
   focusTracked,
   listTracked,
   onActiveTracked,
+  refitZoom,
   selectedText,
   setMode as sdSetMode,
   trackedReplace,
@@ -39,6 +42,10 @@ const DocEditor = dynamic(() => import("./doc-editor"), {
   ssr: false,
   loading: () => <EditorPlaceholder text="Opening the document…" />,
 });
+
+function PaneLabel({ children }: { children: React.ReactNode }) {
+  return <p className="shrink-0 truncate border-b bg-card px-3 py-1.5 text-xs text-muted-foreground">{children}</p>;
+}
 
 function EditorPlaceholder({ text }: { text: string }) {
   return (
@@ -109,6 +116,29 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasBotVersion = job.versions.some((v) => v.kind === "bot");
   const phone = usePhone();
+
+  // ---- comparing with the original: full view, side by side, scroll lock
+  /** "original" shows the student's file as received, on top of the (still loaded) review editor. */
+  const [view, setView] = useState<"review" | "original">("review");
+  const [split, setSplit] = useState(false);
+  const [scrollLock, setScrollLock] = useState(true);
+  const [paneTick, setPaneTick] = useState(0);
+  const sideBySide = split && !phone; // a phone is too narrow for two pages
+  const showOriginal = view === "original" || sideBySide;
+  const originalPane = useRef<HTMLDivElement>(null);
+  const reviewPane = useRef<HTMLDivElement>(null);
+  useLinkedScroll(sideBySide && scrollLock, reviewPane, originalPane, paneTick);
+  const originalSd = useRef<unknown>(null);
+  // Pages keep their zoom when a column narrows or widens (side by side on/off); fit them to the column again.
+  useEffect(() => {
+    if (phone) return;
+    const fit = () => {
+      refitZoom(sd.current);
+      if (sideBySide) refitZoom(originalSd.current);
+    };
+    const t = setTimeout(fit, 120);
+    return () => clearTimeout(t);
+  }, [sideBySide, phone, paneTick]);
 
   // ---- load the requested version into the editor
   useEffect(() => {
@@ -309,6 +339,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   }
 
   const changeMode = (m: Mode) => {
+    setView("review");
     setMode(m);
     sdSetMode(sd.current, m);
   };
@@ -435,14 +466,52 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             <button
               key={m.id}
               role="radio"
-              aria-checked={mode === m.id}
+              aria-checked={view === "review" && mode === m.id}
               title={m.hint}
               onClick={() => changeMode(m.id)}
-              className={cn("h-7 flex-1 rounded px-2 text-xs transition-colors sm:flex-none sm:px-2.5", mode === m.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+              className={cn("h-7 flex-1 rounded px-2 text-xs transition-colors sm:flex-none sm:px-2.5", view === "review" && mode === m.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
             >
               {m.label}
             </button>
           ))}
+          <button
+            role="radio"
+            aria-checked={view === "original"}
+            title="The student’s file exactly as uploaded: no suggestions, no edits"
+            onClick={() => {
+              setSplit(false);
+              setView("original");
+            }}
+            className={cn("h-7 flex-1 rounded px-2 text-xs transition-colors sm:flex-none sm:px-2.5", view === "original" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            Original
+          </button>
+        </div>
+
+        <div className="hidden items-center gap-1 md:flex">
+          <Button
+            size="sm"
+            variant={sideBySide ? "secondary" : "outline"}
+            aria-pressed={sideBySide}
+            onClick={() => {
+              setView("review");
+              setSplit(!split);
+            }}
+            title={sideBySide ? "Back to one page" : "Show the original next to your review"}
+          >
+            <Columns2 /> <span className="hidden xl:inline">Side by side</span>
+          </Button>
+          {sideBySide && (
+            <Button
+              size="sm"
+              variant={scrollLock ? "secondary" : "outline"}
+              aria-pressed={scrollLock}
+              onClick={() => setScrollLock(!scrollLock)}
+              title={scrollLock ? "Scrolling together. Click to scroll each side on its own" : "Each side scrolls on its own. Click to scroll together"}
+            >
+              {scrollLock ? <Link2 /> : <Unlink2 />} <span className="hidden xl:inline">{scrollLock ? "Scroll locked" : "Lock scroll"}</span>
+            </Button>
+          )}
         </div>
 
         <Button size="sm" variant="outline" onClick={() => save({ label: "Your edits" })} disabled={!dirty || saving} title={dirty ? "Save your edits as a new version" : "No unsaved edits"}>
@@ -477,7 +546,31 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50" onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
+        <div className="relative flex min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50" data-split={sideBySide || undefined}>
+          {/* The original sits first, so the review editor below never moves in the tree (no reload, no lost edits). */}
+          {showOriginal && (
+            <div
+              ref={originalPane}
+              data-pane="original"
+              className={cn("flex min-h-0 flex-col bg-card md:bg-muted/50", sideBySide ? "w-1/2 shrink-0 border-r" : "absolute inset-0 z-10")}
+            >
+              <PaneLabel>{sideBySide ? "Original, as received" : "Original, as received (read only). Choose Suggesting, Editing or Viewing to go back to your review."}</PaneLabel>
+              <div className="relative min-h-0 flex-1">
+                <OriginalPane jobId={job.id} fileName={job.fileName} userName={authorName} reflow={phone} onReady={(s) => {
+                  originalSd.current = s;
+                  setPaneTick((t) => t + 1);
+                }} />
+              </div>
+            </div>
+          )}
+          <div
+            ref={reviewPane}
+            data-pane="review"
+            aria-hidden={view === "original" || undefined}
+            className={cn("relative flex min-w-0 flex-1 flex-col", view === "original" && "invisible")}
+            onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
+          {sideBySide && <PaneLabel>Your review</PaneLabel>}
+          <div className="relative min-h-0 flex-1">
           {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
           {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
           {editorError ? (
@@ -498,6 +591,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
                 sdSetMode(s, mode);
                 refresh();
                 setDirty(false);
+                setPaneTick((t) => t + 1);
               }}
               onUpdate={onUpdate}
               onError={(m) => toast.error(m)}
@@ -505,6 +599,8 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           ) : (
             <EditorPlaceholder text="Opening the document…" />
           )}
+          </div>
+          </div>
         </div>
         <aside className="hidden w-[380px] shrink-0 flex-col border-l bg-card lg:flex">{panel}</aside>
       </div>

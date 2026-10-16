@@ -32,6 +32,7 @@ interface UiLike {
     getAt?: (p: { x: number; y: number }) => { id?: string } | null;
   };
   selection?: { apply?: (target: unknown) => unknown };
+  zoom?: { setMode?: (m: "manual" | "fit-width") => void };
   viewport?: { scrollIntoView?: (input: Record<string, unknown>) => Promise<ScrollResult> };
 }
 interface SuperDocLike {
@@ -215,6 +216,17 @@ export function activateTrackedAt(sd: unknown, x: number, y: number): string | n
     return id;
   } catch {
     return null;
+  }
+}
+
+/** Back to SuperDoc's own fit-to-width (one page per screen). */
+export function refitZoom(sd: unknown) {
+  try {
+    const zoom = sdOf(sd)?.ui?.zoom;
+    zoom?.setMode?.("manual");
+    zoom?.setMode?.("fit-width");
+  } catch {
+    /* ignore */
   }
 }
 
