@@ -71,7 +71,13 @@ export function bodyParas(ctx: RuleContext): ParaInfo[] {
 
 export function detectName(ctx: RuleContext): string | null {
   const m = ctx.fullText.match(/\bMy (?:full |birth |complete )?name is ([A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+){0,4})/u);
-  return m ? m[1] : null;
+  if (m) return m[1];
+  // a header line "Name: Sari Wijaya" / "Applicant’s Name: Sari Wijaya"
+  for (const p of headerZone(ctx)) {
+    const h = /^\s*(?:Applicant[’']?s\s+|Full\s+|Student\s+)?Name\s*:\s*(\p{Lu}[\p{L}'’\-]+(?:\s+\p{Lu}[\p{L}'’\-]+){0,4})\s*$/iu.exec(p.text);
+    if (h) return h[1];
+  }
+  return null;
 }
 
 export function detectUniversity(ctx: RuleContext): string | null {

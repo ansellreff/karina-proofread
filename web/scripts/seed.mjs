@@ -1,4 +1,7 @@
-/** Upload documents to the running app and proofread them. node scripts/seed.mjs <file.docx>... [--ai] [--base http://localhost:3000] */
+/**
+ * Upload documents (.docx or .pdf) to the running app and proofread them.
+ *   node scripts/seed.mjs <file>... [--ai] [--no-proofread] [--base http://localhost:3000]
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -13,6 +16,10 @@ for (const f of files) {
   const job = up.created?.[0];
   if (!job) {
     console.error(path.basename(f), up.errors ?? up.error);
+    continue;
+  }
+  if (args.includes("--no-proofread")) {
+    console.log(job.id, path.basename(f), "added (not proofread)");
     continue;
   }
   const res = await fetch(`${base}/api/jobs/${job.id}/proofread`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ai }) });

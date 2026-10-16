@@ -20,8 +20,8 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  // large WebAssembly bundle; load it from node_modules at runtime instead of bundling it
-  serverExternalPackages: ["harper.js"],
+  // large WebAssembly bundle / PDF reader with its own worker: load them from node_modules at runtime
+  serverExternalPackages: ["harper.js", "pdfjs-dist"],
   async headers() {
     return [
       {

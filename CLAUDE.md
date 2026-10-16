@@ -22,8 +22,9 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `python training\eval.py --bot <dir>` — score bot output vs Karina's real edits on the 6 hold-out docs (never tune rules on them)
 - `cd web; npm test` — docx writer + rules + AI-layer unit tests
 - `cd web; npm run dev` → http://localhost:3000 (jobs stored in `web/.data/`, gitignored)
-- `cd web; node scripts/e2e.mjs <sample.docx>` — full browser check (system Edge via playwright-core; dev server must run)
-- `cd web; node scripts/seed.mjs <files> [--ai]` — load documents into the local app
+- `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; dev server must run)
+- `cd web; node scripts/seed.mjs <files> [--ai] [--no-proofread]` — load .docx/.pdf documents into the local app
+- `cd web; npx tsx scripts/pdf-to-docx.ts <file.pdf> --out <dir> [--text]` — check PDF→Word conversion (`lib/pdf/pdf-to-docx.ts`, pdf.js)
 - `cd web; node scripts/clear-jobs.mjs [<jobId> ...]` — list jobs, or move the given ones to `web/.data/trash/`. Karina uploads her own documents to the local app too: never delete a job you didn't create in this session.
 - `cd web; npx tsx scripts/score-docs.ts <file|folder>` — score documents (original vs. reviewed) to calibrate the score
 

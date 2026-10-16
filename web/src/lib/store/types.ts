@@ -43,6 +43,8 @@ export interface Job {
   proofread?: ProofreadInfo;
   /** Latest score of the review in progress (updated as Karina accepts, rejects and edits). */
   score?: { total: number; at: string };
+  /** The student sent a PDF: it was converted to Word (fileName is the .docx); the PDF is kept as sent. */
+  sourceFile?: { name: string; kind: "pdf"; notes: string[] };
 }
 
 export interface Settings {

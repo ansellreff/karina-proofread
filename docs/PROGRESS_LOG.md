@@ -328,3 +328,53 @@ While cleaning up after a crashed test, I deleted every document in the local ap
   - score shown, score rising after Accept all and returning after Undo;
   - a rule saved on the Review rules page reaching the engine. That test restores the rules file afterwards.
 - 41 unit tests, lint, type check and the production build all pass.
+
+## More review-screen improvements and PDF input (2026-10-16)
+
+### Review panel
+- **Collapse:** the panel button (top right of the panel) hides it to a slim rail. The rail still shows the number of open changes and the score; click either to open the panel again.
+- **Resize:** hold and drag the panel’s left edge to make it wider or narrower (300–720 px). Double-click the edge to reset.
+- Both settings are remembered in this browser.
+
+### Side-by-side view
+- **Resize the two sides:** drag the bar between them (20–80%). Double-click resets to half and half.
+- **Choose which side shows what:**
+  - **Drag and drop:** drag a side by the handle in its title bar and drop it on the left or right half. While dragging, two drop zones cover the documents, so nothing can be dropped into the text by mistake.
+  - **Swap button:** the ⇄ button in each title bar swaps the sides.
+- **Change the view from either side:** each side’s title bar has its own picker (Original, Suggesting, Editing, Viewing).
+  - On the review side, it switches the editing mode.
+  - Choosing a review mode on the original’s side brings the review to that side (and the original moves across). Choosing Original on the review’s side does the same in reverse.
+- The side, width and panel settings are remembered. The review editor is never reloaded by any of this, so unsaved edits are safe.
+
+### PDF input
+**Request:** students sometimes send a PDF, so review it and export it as Word and PDF.
+- **Upload:** PDFs can now be uploaded like Word files. The app turns the PDF into a Word document, keeping:
+  - the text and paragraphs;
+  - fonts and sizes;
+  - bold and italic;
+  - alignment (justified, centred);
+  - line spacing;
+  - page size and margins.
+
+  Page numbers and repeated headers or footers are left out. Pictures and table borders can’t be rebuilt; their text is kept.
+- **Review:** from there, everything works as for a Word file: proofreading, review, score, versions, and export to Word (tracked or clean) and PDF.
+- **The PDF as sent:** it is kept exactly as received. Open it with **Student’s PDF** in the top bar, or from the Export menu.
+- **Scans:** a scanned PDF or a photo (no text) is refused with a clear message: ask the student for the Word file.
+- **Tested on the local PDFs:**
+  - The two narrative PDFs (a study plan and an autobiography) convert exactly paragraph for paragraph. The headings, header lines, justified text, Calibri 12 pt and 1.15 spacing all match, and the study plan has 3 pages in Word, as in the PDF.
+  - CVs convert well: headings, company names, dates and bullets stay separate.
+  - Slide-style PDFs and forms keep all their text but come out rougher (they are layouts, not documents).
+  - Word opens the converted files without problems.
+- **Small extra:** the student’s name is now also taken from a header line such as “Name: …”.
+
+### Verified
+- **43/43 end-to-end checks in a real browser.** New ones:
+  - swap sides and pick views from either side;
+  - resize the sides;
+  - hide, show and resize the panel;
+  - PDF upload and conversion, the PDF kept exactly as sent;
+  - proofreading the converted PDF and opening it with tracked changes;
+  - exporting it as Word and as PDF.
+- **Fixed a timing problem in the test itself:** it sometimes read the score before the previous update had arrived.
+- The proofreading results are still identical on all 43 local documents. 42 unit tests and lint pass.
+- The two sample PDFs from “Enrollment Document_Not Checked” are in the app, not yet proofread, so you can try the AI estimate yourself.

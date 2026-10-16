@@ -29,8 +29,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/s
     pr.score = await proofreadScores(job, await store.readVersion(id, 0), await store.readVersion(id, pr.version), pr.changes, rules);
   }
   const openFixes = form.has("openFixes") ? Math.max(0, Number(form.get("openFixes")) || 0) : undefined;
-  const current = await currentScore(job, new Uint8Array(await file.arrayBuffer()), pr.changes, new Set(pending.map(String)), rules, openFixes);
-  const fresh = await store.get(id); // don't overwrite changes made while scoring
+  const current = await currentScore(job, new Uint8Array(await file.arrayBuffer()), pr.changes, new Set(pending.map(String)), rules, openFixes);  const fresh = await store.get(id); // don't overwrite changes made while scoring
   if (fresh?.proofread) {
     fresh.proofread.score = pr.score;
     fresh.score = { total: current.total, at: current.at };

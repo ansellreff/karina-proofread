@@ -56,9 +56,9 @@ Each milestone ends with a review by Karina before the next one starts.
 | M1 | Style learning, Word tracked-changes engine, Karina Rules Engine | ✅ Done (2026-10-16) |
 | M2 | Claude layer, accuracy test (rules vs. rules + AI), token/cost estimate | ✅ Done (2026-10-16): 56% recall / 58% precision, US$0.09 per doc |
 | M3 | Web app (local): inbox, proofreading, Word-like review editor, **restore original**, export | ✅ Done (2026-10-16): 20/20 browser checks |
-| M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100** | ✅ Done (2026-10-16): 34/34 browser checks, waiting for Karina's review |
+| M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100**, resizable/collapsible panel, drag-and-drop side-by-side, **PDF input** | ✅ Done (2026-10-16): 43/43 browser checks, waiting for Karina's review |
 | M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | ⏳ |
-| M5 | Gmail auto-intake, learning loop, PDF/CV input | ⏳ |
+| M5 | Gmail auto-intake, learning loop (PDF input already done in M3+) | ⏳ |
 
 ### M2 — Claude layer
 - Claude proofreads in Karina's voice, following [web/prompts/karina-style-guide.md](../web/prompts/karina-style-guide.md) and anonymised examples.

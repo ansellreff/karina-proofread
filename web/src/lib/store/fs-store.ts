@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, rename, writeFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { DocxPackage } from "../docx/package";
+import { pdfToDocx } from "../pdf/pdf-to-docx";
 import { bodyParagraphs } from "../docx/paragraphs";
 import { acceptAllRevisions } from "../docx/accept";
 import { buildContext, detectName } from "../rules/detect";
@@ -36,8 +37,13 @@ export class FsJobStore implements JobStore {
     }
   }
 
-  async create(fileName: string, data: Uint8Array, source: Job["source"] = "upload"): Promise<Job> {
+  async create(uploadName: string, upload: Uint8Array, source: Job["source"] = "upload"): Promise<Job> {
     const id = randomUUID();
+    // a PDF is converted to Word first; the PDF itself is kept as the student sent it
+    const isPdf = new TextDecoder().decode(upload.slice(0, 5)) === "%PDF-";
+    const converted = isPdf ? await pdfToDocx(upload) : null;
+    const data = converted ? converted.docx : upload;
+    const fileName = converted ? uploadName.replace(/\.pdf$/i, "") + ".docx" : uploadName;
     const pkg = await DocxPackage.load(data);
     const doc = await pkg.xml("word/document.xml");
     if (!doc) throw new Error("This file is not a Word document (.docx).");
@@ -53,10 +59,12 @@ export class FsJobStore implements JobStore {
       source,
       createdAt: now,
       updatedAt: now,
-      versions: [{ n: 0, label: "Original (as received)", kind: "original", createdAt: now }],
+      versions: [{ n: 0, label: converted ? "Original (converted from PDF)" : "Original (as received)", kind: "original", createdAt: now }],
       current: 0,
+      ...(converted ? { sourceFile: { name: uploadName, kind: "pdf" as const, notes: converted.notes } } : {}),
     };
     await mkdir(this.dir(id), { recursive: true });
+    if (converted) await writeFile(path.join(this.dir(id), "source.pdf"), upload);
     await writeFile(path.join(this.dir(id), "v0.docx"), data);
     await this.save(job);
     return job;
@@ -73,6 +81,11 @@ export class FsJobStore implements JobStore {
     await rename(this.dir(id), path.join(trash, `${id}_${new Date().toISOString().replace(/[:.]/g, "-")}`)).catch(async (e: NodeJS.ErrnoException) => {
       if (e.code !== "ENOENT") throw e;
     });
+  }
+
+  /** The PDF exactly as the student sent it (documents converted from PDF). */
+  async readSource(id: string): Promise<Uint8Array> {
+    return new Uint8Array(await readFile(path.join(this.dir(id), "source.pdf")));
   }
 
   async readVersion(id: string, n: number): Promise<Uint8Array> {

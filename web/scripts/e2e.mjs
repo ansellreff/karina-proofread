@@ -14,7 +14,8 @@ import { chromium } from "playwright-core";
 
 const args = process.argv.slice(2);
 const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
-const sample = args.find((a, i) => !a.startsWith("--") && !["--out", "--base"].includes(args[i - 1]));
+const sample = args.find((a, i) => !a.startsWith("--") && !["--out", "--base", "--pdf"].includes(args[i - 1]));
+const pdfSample = opt("--pdf", null); // optional: also check PDF upload, conversion, review and export
 const base = opt("--base", "http://localhost:3000");
 const out = path.resolve(opt("--out", "e2e-shots"));
 if (!sample) throw new Error("usage: node scripts/e2e.mjs <sample.docx>");
@@ -133,8 +134,15 @@ const scoreAfter = async (prev) => {
 };
 await panel.getByRole("tab", { name: /^Score/ }).click();
 await panel.locator("[data-testid=score-now]").waitFor({ timeout: 60000 }).catch(() => {});
-await page.waitForTimeout(2500); // let the score settle after the earlier accept/reject
-const score0 = await scoreNow();
+// let the score settle after the earlier accept/reject: no update running and the same value for 3 s
+let score0 = await scoreNow();
+for (let i = 0; i < 20; i++) {
+  await page.waitForTimeout(3000);
+  const busy = await panel.getByLabel("Updating the score").count();
+  const s = await scoreNow();
+  if (!busy && s === score0) break;
+  score0 = s;
+}
 check("score out of 100 is shown after proofreading", score0 > 0 && score0 <= 100, `${score0}`);
 await panel.getByRole("tab", { name: /What changed/ }).click();
 await panel.getByRole("button", { name: "Accept all" }).click();
@@ -209,6 +217,39 @@ await page.waitForTimeout(600);
 const unlockedTop = await paneScroll("original");
 check("scroll lock moves both sides; unlocked they move alone", lockedTop > 100 && unlockedTop === lockedTop, `locked ${lockedTop}, after unlocking ${unlockedTop}`);
 await page.screenshot({ path: path.join(out, "02e-side-by-side.png") });
+// swap sides, pick a view on the original's side (the sides swap), resize, hide and resize the panel
+const sideOf = (p) => page.locator(`[data-pane="${p}"]`).getAttribute("data-side");
+const paneWidth = (p) => page.locator(`[data-pane="${p}"]`).evaluate((e) => Math.round(e.getBoundingClientRect().width));
+await page.locator('[data-pane-header="original"]').getByRole("button", { name: "Swap sides" }).click();
+await page.waitForTimeout(500);
+const swappedSide = await sideOf("original");
+await page.locator('[data-pane-header="original"]').getByRole("radio", { name: "Viewing" }).click();
+await page.waitForTimeout(500);
+const reviewMode = await page.locator('[data-pane-header="review"] [aria-checked="true"]').textContent();
+check("split view: swap sides, and pick the review's mode from either side", swappedSide === "right" && (await sideOf("original")) === "left" && reviewMode === "Viewing" && (await editorKept()), `${swappedSide}, then ${await sideOf("original")}, review in ${reviewMode}`);
+await page.locator('[data-pane-header="review"]').getByRole("radio", { name: "Suggesting" }).click();
+const w0 = await paneWidth("original");
+const sep = await page.getByRole("separator", { name: "Resize the two sides" }).boundingBox();
+await page.mouse.move(sep.x + sep.width / 2, sep.y + 200);
+await page.mouse.down();
+await page.mouse.move(sep.x - 200, sep.y + 200, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(800);
+const w1 = await paneWidth("original");
+check("split view: the two sides can be resized by dragging the divider", w1 < w0 - 150, `${w0}px -> ${w1}px`);
+await page.getByRole("button", { name: "Hide the review panel" }).click();
+await page.waitForTimeout(600);
+const hidden = await page.getByRole("button", { name: "Show the review panel" }).isVisible();
+await page.getByRole("button", { name: "Show the review panel" }).click();
+await page.waitForTimeout(600);
+const edgeBox = await page.getByRole("separator", { name: "Resize the review panel" }).boundingBox();
+await page.mouse.move(edgeBox.x + edgeBox.width / 2, 500);
+await page.mouse.down();
+await page.mouse.move(edgeBox.x - 120, 500, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(600);
+const asideW = await page.locator("aside").first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
+check("review panel: can be hidden, shown again and resized", hidden && asideW > 450 && (await editorKept()), `panel ${asideW}px`);
 await page.getByRole("button", { name: /Side by side/ }).click();
 await page.waitForTimeout(500);
 check("comparing never reloads the review editor (unsaved edits are safe)", (await editorKept()) && (await page.locator('[data-pane="original"]').count()) === 0);
@@ -302,6 +343,44 @@ await phone.waitForTimeout(600);
 await phone.screenshot({ path: path.join(out, "06-review-phone-sheet.png") });
 const overflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 check("phone: no horizontal page scroll", !overflow);
+
+// 9. PDF from a student: converted to Word, reviewed and exported like any document
+if (pdfSample) {
+  const pf = new FormData();
+  const pdfBytes = await readFile(pdfSample);
+  pf.append("files", new Blob([pdfBytes]), path.basename(pdfSample));
+  const pup = await (await fetch(`${base}/api/jobs`, { method: "POST", body: pf })).json();
+  const pjob = pup.created?.[0];
+  check("PDF upload is converted to a Word document", !!pjob && pjob.fileName.endsWith(".docx") && pjob.sourceFile?.kind === "pdf", pup.errors?.join("; ") ?? pjob?.fileName);
+  if (pjob) {
+    try {
+      const src = await fetch(`${base}/api/jobs/${pjob.id}/file?source=1`);
+      check("the student's PDF is kept exactly as sent", src.headers.get("content-type") === "application/pdf" && Buffer.compare(Buffer.from(await src.arrayBuffer()), Buffer.from(pdfBytes)) === 0);
+      const ppr = await fetch(`${base}/api/jobs/${pjob.id}/proofread`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ai: false }) });
+      const plast = (await ppr.text()).trim().split("\n").map((l) => JSON.parse(l)).at(-1);
+      check("the converted PDF is proofread", !!plast.done && plast.job.proofread.changes.length > 0, plast.error ?? `${plast.job?.proofread?.changes.length} changes`);
+      const pp = await newPage({ width: 1440, height: 900 });
+      await pp.goto(`${base}/jobs/${pjob.id}`);
+      await pp.waitForFunction(() => !!window.__superdoc, null, { timeout: 60000 });
+      await pp.waitForTimeout(2000);
+      const ptracked = await pp.evaluate(async () => (await window.__superdoc.activeEditor.doc.trackChanges.list({ limit: 5000 })).total);
+      check("the converted PDF opens in the review editor with tracked changes", ptracked > 0, `${ptracked} tracked changes`);
+      await pp.screenshot({ path: path.join(out, "07-pdf-review.png") });
+      await pp.close();
+      const cleanPdf = await fetch(`${base}/api/jobs/${pjob.id}/file?v=current&download=clean`);
+      const czip = await JSZip.loadAsync(new Uint8Array(await cleanPdf.arrayBuffer()));
+      check("a reviewed PDF exports as a Word file", !!czip.file("word/document.xml") && /DONE_.+_clean\.docx/.test(decodeURIComponent(cleanPdf.headers.get("content-disposition") ?? "")), cleanPdf.headers.get("content-disposition") ?? "");
+      const ppv = await newPage({ width: 1200, height: 900 });
+      await ppv.addInitScript(() => { window.print = () => { window.__printed = true; }; });
+      await ppv.goto(`${base}/jobs/${pjob.id}/print?v=${plast.job.current}&markup=0`);
+      await ppv.waitForFunction(() => window.__printed === true, null, { timeout: 60000 }).catch(() => {});
+      check("a reviewed PDF exports as PDF (print view)", await ppv.evaluate(() => window.__printed === true));
+      await ppv.close();
+    } finally {
+      await fetch(`${base}/api/jobs/${pjob.id}`, { method: "DELETE" });
+    }
+  }
+}
 
 check("no requests leave the app (privacy)", !blocked.some((b) => b.startsWith("EXTERNAL")), blocked.filter((b) => b.startsWith("EXTERNAL")).slice(0, 3).join("; "));
 console.log(`\nconsole errors (${consoleErrors.length}):`, consoleErrors.slice(0, 8));

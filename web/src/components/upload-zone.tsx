@@ -55,8 +55,8 @@ export function UploadZone({ compact = false }: { compact?: boolean }) {
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className="font-medium">{busy ? "Adding…" : "Drop student documents here"}</p>
-        <p className="text-sm text-muted-foreground">Word files (.docx). They stay on this computer until you export them.</p>
+        <p className="font-medium">{busy ? "Adding… (a PDF takes a few seconds to convert)" : "Drop student documents here"}</p>
+        <p className="text-sm text-muted-foreground">Word (.docx) or PDF files. A PDF is turned into a Word file you can review. Files stay on this computer until you export them.</p>
       </div>
       <button
         type="button"
@@ -70,7 +70,7 @@ export function UploadZone({ compact = false }: { compact?: boolean }) {
         ref={input}
         type="file"
         multiple
-        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
         className="sr-only"
         onChange={(e) => e.target.files && upload(e.target.files)}
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, FileCheck2, Link2, ListChecks, Loader2, MessageSquareText, Save, ScanText, Sparkles, Unlink2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, FileCheck2, FileText, Link2, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Save, ScanText, Sparkles, Unlink2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import { OriginalPane } from "./original-pane";
 import { ScorePanel, scoreTone, type Scores } from "./score-panel";
+import { DropOverlay, PaneHeader, PanelResizer, SplitDivider, usePreference, type PaneView } from "./split-view";
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
@@ -128,9 +129,21 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const showOriginal = view === "original" || sideBySide;
   const originalPane = useRef<HTMLDivElement>(null);
   const reviewPane = useRef<HTMLDivElement>(null);
+  const splitBox = useRef<HTMLDivElement>(null);
   useLinkedScroll(sideBySide && scrollLock, reviewPane, originalPane, paneTick);
   const originalSd = useRef<unknown>(null);
-  // Pages keep their zoom when a column narrows or widens (side by side on/off); fit them to the column again.
+  /** Which side the original is on, the left side's share of the width, and whether the review panel is open (remembered). */
+  const [originalSide, setOriginalSide] = usePreference<"left" | "right">("original-side", "left");
+  const [savedRatio, saveRatio] = usePreference("split-ratio", 0.5);
+  const [liveRatio, setLiveRatio] = useState<number | null>(null); // while dragging the divider
+  const ratio = liveRatio ?? savedRatio;
+  const [panelOpen, setPanelOpen] = usePreference("panel-open", true);
+  const [savedPanelWidth, savePanelWidth] = usePreference("panel-width", 380);
+  const [livePanelWidth, setLivePanelWidth] = useState<number | null>(null); // while dragging its edge
+  const panelWidth = livePanelWidth ?? savedPanelWidth;
+  const [draggedPane, setDraggedPane] = useState<"original" | "review" | null>(null);
+  const swapSides = () => setOriginalSide(originalSide === "left" ? "right" : "left");
+  // Pages keep their zoom when a column narrows or widens (side by side, resizing, panel); fit them to the column again.
   useEffect(() => {
     if (phone) return;
     const fit = () => {
@@ -139,7 +152,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     };
     const t = setTimeout(fit, 120);
     return () => clearTimeout(t);
-  }, [sideBySide, phone, paneTick]);
+  }, [sideBySide, phone, paneTick, savedRatio, panelOpen, savedPanelWidth]);
 
   // ---- load the requested version into the editor
   useEffect(() => {
@@ -434,7 +447,8 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
 
   const panel = (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="flex h-full min-h-0 flex-col gap-0">
-      <TabsList variant="line" className="h-11 w-full shrink-0 justify-start gap-1 overflow-x-auto rounded-none border-b px-2.5">
+      <div className="flex h-11 shrink-0 items-center border-b pr-1.5">
+      <TabsList variant="line" className="h-11 min-w-0 flex-1 justify-start gap-1 overflow-x-auto rounded-none px-2.5">
         <TabsTrigger value="changes" className="flex-none">
           What changed {panelChanges.length > 0 && <span className="tabular-nums text-muted-foreground">{panelChanges.length}</span>}
         </TabsTrigger>
@@ -448,6 +462,10 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           Versions
         </TabsTrigger>
       </TabsList>
+        <Button size="icon-sm" variant="ghost" className="hidden shrink-0 lg:inline-flex" onClick={() => setPanelOpen(false)} title="Hide the review panel" aria-label="Hide the review panel">
+          <PanelRightClose />
+        </Button>
+      </div>
       <TabsContent value="changes" className="min-h-0 flex-1">
         {panelChanges.length > 0 ? (
           <ChangesPanel
@@ -522,6 +540,17 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             {job.docType === "Unknown" ? "Document" : job.docType}, {job.versions.find((v) => v.n === shown)?.label.toLowerCase()}
           </p>
         </div>
+        {job.sourceFile && (
+          <a
+            href={`/api/jobs/${job.id}/file?source=1`}
+            target="_blank"
+            rel="noopener"
+            title={`The PDF exactly as the student sent it. ${job.sourceFile.notes.join(" ")}`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <FileText className="size-3.5" /> <span className="hidden sm:inline">Student’s PDF</span>
+          </a>
+        )}
         <StatusChip status={job.status} className="hidden md:inline-flex" />
         {scores && canScore && (
           <button
@@ -539,7 +568,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           </button>
         )}
 
-        <div className="order-last flex w-full items-center rounded-md border bg-background p-0.5 sm:order-none sm:w-auto" role="radiogroup" aria-label="Editing mode">
+        <div className={cn("order-last flex w-full items-center rounded-md border bg-background p-0.5 sm:order-none sm:w-auto", sideBySide && "hidden")} role="radiogroup" aria-label="Editing mode">
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -615,6 +644,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => exportAs("pdf")}>PDF, clean</DropdownMenuItem>
             <DropdownMenuItem onClick={() => exportAs("pdf-markup")}>PDF with markup</DropdownMenuItem>
+            {job.sourceFile && (
+              <DropdownMenuItem onClick={() => window.open(`/api/jobs/${job.id}/file?source=1`, "_blank", "noopener")}>The student’s PDF, as sent</DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={markDone} disabled={job.status === "done"}>
               <FileCheck2 /> Mark as done
@@ -624,15 +656,33 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative flex min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50" data-split={sideBySide || undefined}>
-          {/* The original sits first, so the review editor below never moves in the tree (no reload, no lost edits). */}
+        <div ref={splitBox} className="relative flex min-w-0 flex-1 overflow-hidden bg-card md:bg-muted/50" data-split={sideBySide || undefined}>
+          {/* The panes keep their place in the tree; CSS order puts them left or right, so the review editor never
+              reloads (no lost edits) when the sides are swapped, resized or split. */}
           {showOriginal && (
             <div
               ref={originalPane}
               data-pane="original"
-              className={cn("flex min-h-0 flex-col bg-card md:bg-muted/50", sideBySide ? "w-1/2 shrink-0 border-r" : "absolute inset-0 z-10")}
+              data-side={sideBySide ? originalSide : undefined}
+              className={cn("flex min-h-0 min-w-0 flex-col bg-card md:bg-muted/50", sideBySide ? "shrink-0" : "absolute inset-0 z-10")}
+              style={sideBySide ? { order: originalSide === "left" ? 0 : 2, width: `${(originalSide === "left" ? ratio : 1 - ratio) * 100}%` } : undefined}
             >
-              <PaneLabel>{sideBySide ? "Original, as received" : "Original, as received (read only). Choose Suggesting, Editing or Viewing to go back to your review."}</PaneLabel>
+              {sideBySide ? (
+                <PaneHeader
+                  which="original"
+                  value="original"
+                  onPick={(v) => {
+                    if (v === "original") return;
+                    swapSides(); // the review comes to this side, the original goes to the other
+                    changeMode(v);
+                  }}
+                  onSwap={swapSides}
+                  onDragStart={() => setDraggedPane("original")}
+                  onDragEnd={() => setDraggedPane(null)}
+                />
+              ) : (
+                <PaneLabel>Original, as received (read only). Choose Suggesting, Editing or Viewing to go back to your review.</PaneLabel>
+              )}
               <div className="relative min-h-0 flex-1">
                 <OriginalPane jobId={job.id} fileName={job.fileName} userName={authorName} reflow={phone} onReady={(s) => {
                   originalSd.current = s;
@@ -641,13 +691,28 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               </div>
             </div>
           )}
+          {sideBySide && <SplitDivider container={splitBox} ratio={ratio} onRatio={setLiveRatio} onCommit={(r) => {
+            setLiveRatio(null);
+            saveRatio(r);
+          }} order={1} />}
           <div
             ref={reviewPane}
             data-pane="review"
+            data-side={sideBySide ? (originalSide === "left" ? "right" : "left") : undefined}
             aria-hidden={view === "original" || undefined}
             className={cn("relative flex min-w-0 flex-1 flex-col", view === "original" && "invisible")}
+            style={sideBySide ? { order: originalSide === "left" ? 2 : 0 } : undefined}
             onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
-          {sideBySide && <PaneLabel>Your review</PaneLabel>}
+          {sideBySide && (
+            <PaneHeader
+              which="review"
+              value={mode as PaneView}
+              onPick={(v) => (v === "original" ? swapSides() : changeMode(v))}
+              onSwap={swapSides}
+              onDragStart={() => setDraggedPane("review")}
+              onDragEnd={() => setDraggedPane(null)}
+            />
+          )}
           <div className="relative min-h-0 flex-1">
           {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
           {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
@@ -679,8 +744,44 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           )}
           </div>
           </div>
+          {sideBySide && draggedPane && (
+            <DropOverlay
+              dragged={draggedPane}
+              onDrop={(side) => {
+                // dropping the original on a side puts it there; dropping the review puts the original opposite
+                setOriginalSide(draggedPane === "original" ? side : side === "left" ? "right" : "left");
+                setDraggedPane(null);
+              }}
+              onCancel={() => setDraggedPane(null)}
+            />
+          )}
         </div>
-        <aside className="hidden w-[380px] shrink-0 flex-col border-l bg-card lg:flex">{panel}</aside>
+        {panelOpen ? (
+          <aside className="relative hidden shrink-0 flex-col border-l bg-card lg:flex" style={{ width: panelWidth, maxWidth: "55vw", minWidth: 300 }}>
+            <PanelResizer width={panelWidth} onWidth={setLivePanelWidth} onCommit={(w) => {
+              setLivePanelWidth(null);
+              savePanelWidth(w);
+            }} />
+            {panel}
+          </aside>
+        ) : (
+          <aside className="hidden w-11 shrink-0 flex-col items-center gap-2 border-l bg-card py-2 lg:flex" aria-label="Review panel (collapsed)">
+            <Button size="icon-sm" variant="ghost" onClick={() => setPanelOpen(true)} title="Show the review panel" aria-label="Show the review panel">
+              <PanelRightOpen />
+            </Button>
+            {panelChanges.length > 0 && (
+              <button type="button" onClick={() => { setTab("changes"); setPanelOpen(true); }} title="What changed" className="flex flex-col items-center rounded px-1 py-1.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground">
+                <MessageSquareText className="size-4" />
+                <span className="tabular-nums">{panelChanges.filter((c) => c.live.length > 0).length}</span>
+              </button>
+            )}
+            {scores && canScore && (
+              <button type="button" onClick={() => { setTab("score"); setPanelOpen(true); }} title="Score" className={cn("rounded px-1 py-1.5 font-serif text-sm font-semibold tabular-nums hover:bg-secondary", scoreTone(scores.current.total))}>
+                {scores.current.total}
+              </button>
+            )}
+          </aside>
+        )}
       </div>
 
       {/* phone / tablet: panel as a bottom sheet */}
