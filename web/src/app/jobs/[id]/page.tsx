@@ -19,7 +19,5 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
   const job = await getJob(id);
   if (!job) notFound();
   const settings = await st.jobs.getSettings();
-  return (
-    <Workspace initialJob={job} aiDefault={settings.aiDefault} hasApiKey={!!process.env.ANTHROPIC_API_KEY} authorName={settings.authorName} online={st.mode === "onedrive"} />
-  );
+  return <Workspace initialJob={job} aiDefault={settings.aiDefault} hasApiKey={!!process.env.ANTHROPIC_API_KEY} authorName={settings.authorName} />;
 }

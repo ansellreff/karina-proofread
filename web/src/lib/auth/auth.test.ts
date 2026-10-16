@@ -1,81 +1,57 @@
 import { describe, expect, it } from "vitest";
 import { isHoldout } from "../learn/learn";
-import { authConfig, AuthConfigError, isLocalMode } from "./config";
-import { NotAllowedError, needsRefresh, refreshSession, signIn } from "./oauth";
-import { joinSession, seal, sessionCookies, unseal, type Session } from "./session";
+import { MemoryFiles } from "../storage/files";
+import { authConfig, AuthConfigError, databaseUrl } from "./config";
+import { clearFailures, hashPassword, LOCK, lockedFor, recordFailure, verifyPassword } from "./password";
+import { newSession, seal, unseal, type Session } from "./session";
 
 const SECRET = "x".repeat(40);
-const env = { MS_CLIENT_ID: "client", MS_CLIENT_SECRET: "secret", AUTH_SECRET: SECRET, ALLOWED_ACCOUNT: "Karina@Example.com, other@example.com" };
-const cfg = authConfig(env)!;
 
-const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-const idToken = (claims: Record<string, unknown>) => `${b64({ alg: "RS256" })}.${b64(claims)}.sig`;
-
-function tokenEndpoint(body: Record<string, unknown>, status = 200) {
-  const seen: URLSearchParams[] = [];
-  const fetcher = (async (_url: unknown, init?: RequestInit) => {
-    seen.push(new URLSearchParams(String(init?.body)));
-    return new Response(JSON.stringify(body), { status });
-  }) as typeof fetch;
-  return { fetcher, seen };
-}
-
-describe("sign-in settings", () => {
-  it("is local mode without MS_CLIENT_ID, and refuses a half setup", () => {
+describe("online settings", () => {
+  it("is local mode without a password; fails closed on Vercel", () => {
     expect(authConfig({})).toBeNull();
-    expect(isLocalMode({})).toBe(true);
-    expect(() => authConfig({ MS_CLIENT_ID: "x" })).toThrow(AuthConfigError);
-    expect(() => authConfig({ ...env, AUTH_SECRET: "short" })).toThrow(/32/);
-    expect(cfg.allowed).toEqual(["karina@example.com", "other@example.com"]);
+    expect(databaseUrl({})).toBeNull();
+    expect(() => authConfig({ VERCEL: "1" })).toThrow(AuthConfigError);
+    expect(() => databaseUrl({ VERCEL: "1" })).toThrow(AuthConfigError);
+    expect(() => authConfig({ APP_PASSWORD_HASH: "h", AUTH_SECRET: "short" })).toThrow(/32/);
+    expect(authConfig({ APP_PASSWORD_HASH: "h", AUTH_SECRET: SECRET })).toEqual({ passwordHash: "h", secret: SECRET });
+  });
+});
+
+describe("password", () => {
+  it("checks the password against its hash (never stored as is)", async () => {
+    const hash = await hashPassword("Correct horse battery staple");
+    expect(hash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$/);
+    expect(hash).not.toContain("Correct");
+    expect(await verifyPassword("Correct horse battery staple", hash)).toBe(true);
+    expect(await verifyPassword("correct horse battery staple", hash)).toBe(false);
+    expect(await verifyPassword("", hash)).toBe(false);
+    expect(await verifyPassword("x", "not-a-hash")).toBe(false);
+    expect(await hashPassword("same")).not.toBe(await hashPassword("same")); // salted
+  });
+
+  it("locks an address after repeated wrong passwords, for that address only, and frees it after the window", async () => {
+    const files = new MemoryFiles();
+    const t0 = Date.parse("2026-10-17T10:00:00Z");
+    for (let i = 0; i < LOCK.tries - 1; i++) await recordFailure(files, "1.2.3.4", t0 + i * 1000);
+    expect(await lockedFor(files, "1.2.3.4", t0 + 5000)).toBe(0);
+    await recordFailure(files, "1.2.3.4", t0 + 5000);
+    expect(await lockedFor(files, "1.2.3.4", t0 + 6000)).toBe(15);
+    expect(await lockedFor(files, "5.6.7.8", t0 + 6000)).toBe(0);
+    expect(await lockedFor(files, "1.2.3.4", t0 + LOCK.windowMs + 6000)).toBe(0);
+    expect(new TextDecoder().decode((await files.read("auth/failures.json"))!)).not.toContain("1.2.3.4"); // stored hashed
+    await clearFailures(files, "1.2.3.4");
+    expect(await lockedFor(files, "1.2.3.4", t0 + 6000)).toBe(0);
   });
 });
 
 describe("session cookie", () => {
-  const session: Session = { accountId: "a", email: "karina@example.com", name: "Karina", accessToken: "A".repeat(3000), refreshToken: "R".repeat(2000), expiresAt: Date.now() + 3600_000 };
-
-  it("round-trips encrypted, split over cookies, and rejects tampering or another secret", async () => {
-    const sealed = await seal({ ...session }, SECRET, 3600);
-    expect(sealed).not.toContain("karina@example.com");
-    const cookies = sessionCookies(sealed);
-    const set = cookies.filter((c) => c.value);
-    expect(set.length).toBeGreaterThan(1);
-    expect(cookies.filter((c) => !c.value).every((c) => c.maxAge === 0)).toBe(true); // stale chunks are cleared
-    const jar = new Map(set.map((c) => [c.name, c.value]));
-    const joined = joinSession((n) => jar.get(n));
-    expect((await unseal<Session>(joined, SECRET))?.email).toBe("karina@example.com");
-    expect(await unseal(joined, "y".repeat(40))).toBeNull();
-    expect(await unseal(`${joined!.slice(0, -4)}AAAA`, SECRET)).toBeNull();
+  it("round-trips encrypted, and rejects tampering or another secret", async () => {
+    const sealed = await seal({ ...newSession() }, SECRET, 3600);
+    expect((await unseal<Session>(sealed, SECRET))?.v).toBe(1);
+    expect(await unseal(sealed, "y".repeat(40))).toBeNull();
+    expect(await unseal(`${sealed.slice(0, -4)}AAAA`, SECRET)).toBeNull();
     expect(await unseal(null, SECRET)).toBeNull();
-  });
-
-  it("signing out clears every chunk", () => {
-    expect(sessionCookies(null).every((c) => c.value === "" && c.maxAge === 0)).toBe(true);
-  });
-});
-
-describe("Microsoft sign-in", () => {
-  it("lets Karina in (PKCE verifier sent) and keeps everyone else out", async () => {
-    const ok = tokenEndpoint({ access_token: "at", refresh_token: "rt", expires_in: 3600, id_token: idToken({ oid: "o1", email: "karina@example.com", name: "Karina" }) });
-    const s = await signIn(cfg, "code", "verifier", "http://localhost:3000/api/auth/callback", ok.fetcher);
-    expect(s).toMatchObject({ accountId: "o1", email: "karina@example.com", accessToken: "at", refreshToken: "rt" });
-    expect(ok.seen[0].get("code_verifier")).toBe("verifier");
-    expect(ok.seen[0].get("grant_type")).toBe("authorization_code");
-
-    const stranger = tokenEndpoint({ access_token: "at", refresh_token: "rt", expires_in: 3600, id_token: idToken({ oid: "o2", preferred_username: "someone@outlook.com" }) });
-    await expect(signIn(cfg, "code", "v", "http://x/cb", stranger.fetcher)).rejects.toBeInstanceOf(NotAllowedError);
-
-    const refused = tokenEndpoint({ error: "invalid_grant", error_description: "AADSTS70008: The code has expired.\r\nTrace ID: …" }, 400);
-    await expect(signIn(cfg, "code", "v", "http://x/cb", refused.fetcher)).rejects.toThrow("AADSTS70008: The code has expired.");
-  });
-
-  it("refreshes an expiring token and keeps the new refresh token", async () => {
-    const s: Session = { accountId: "a", email: "k", name: "K", accessToken: "old", refreshToken: "r1", expiresAt: Date.now() + 60_000, folderId: "f" };
-    expect(needsRefresh(s)).toBe(true);
-    expect(needsRefresh({ ...s, expiresAt: Date.now() + 3600_000 })).toBe(false);
-    const t = tokenEndpoint({ access_token: "new", refresh_token: "r2", expires_in: 3600 });
-    const fresh = await refreshSession(cfg, s, t.fetcher);
-    expect(fresh).toMatchObject({ accessToken: "new", refreshToken: "r2", folderId: "f" });
-    expect(t.seen[0].get("refresh_token")).toBe("r1");
   });
 });
 

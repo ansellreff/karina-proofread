@@ -607,3 +607,41 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - **Checks:** a new end-to-end check covers the folded icon, +, slider, Ctrl+wheel, folding again and fit width (**58/58**).
   - The test now hides the development server's own corner bubble, which had been sitting over the pane's corner.
   - The fitted page in a narrow side-by-side column was only 33%: that is what the zoom is for.
+
+## M4 re-planned: online on Vercel with a password, no OneDrive (2026-10-17)
+
+**Why:** Microsoft said Karina isn't eligible for a free Azure account, and Azure is required for a personal account to let a website reach OneDrive. **Her decision:** put the bot and AI online on Vercel, reachable from any PC or phone; she uploads and downloads files by hand; no OneDrive sync. Vercel's free Hobby plan fits, since this is personal, unpaid use (she confirmed).
+
+### What changed
+- **Storage online:** a private **Neon** database, connected through Vercel, in Singapore (closest to Indonesia and Taiwan; the app's server runs there too).
+  - It holds everything the app keeps: documents with every version, Recently deleted, settings, rules, AI rulebook, learning data, AI usage.
+  - It is stored the same way as on this computer, so copying her data over is file for file.
+  - A save is visible straight away. A storage option that could briefly serve an older copy of a file was ruled out for that reason.
+- **Sign-in:** one password, no account.
+  - Only a scrambled form of the password (scrypt) is kept in Vercel's settings; the password itself is never stored.
+  - A device stays signed in for 30 days through an encrypted cookie. **Settings → Sign out** ends it.
+  - After 5 wrong tries from one connection, sign-in waits 15 minutes for that connection.
+  - Every page and every API call checks the sign-in. Online, the app refuses to run if a setting is missing, rather than opening unprotected.
+- **Removed:** Microsoft sign-in and everything OneDrive (Inbox, Save to OneDrive, OneDrive PDF, the folder setup). It stays in the project history (`6bda307`) in case it is ever wanted again. PDF export is the print view again.
+- **Kept from the earlier work:** the AI costs page, phone install, and the bundling safety: no student files in the build, as checked again.
+- **Her data:** `scripts/copy-to-online.ts` copies everything from this computer once, skips what is already there, and checks that every file arrived.
+- **Setup guide** ([ONLINE_SETUP.md](ONLINE_SETUP.md)): now GitHub, Vercel, Neon and the password, about 15 minutes and free.
+
+### Verified
+- **Unit tests: 79** (the document store now also runs on a real Postgres engine, plus the password, lockout, cookie and page guard).
+- **Online mode, run on this computer** against Postgres, as the production build: **15/15 checks**.
+  - sign-in required for pages and the API;
+  - wrong password refused;
+  - lockout after 5 tries;
+  - sign-in and the cookie's protections;
+  - upload, proofread, save, export (`DONE_…` name);
+  - every page;
+  - sign out.
+- **The data copy** tried against a test database: 57 of 57 files (0.9 MB) copied and checked; running it again copies nothing.
+- **Local mode** unchanged: **58/58** end-to-end checks.
+- Lint, type check and build pass. Her 5 documents, rules and 32 learned reviews were untouched.
+
+### Next
+- Karina creates the GitHub repository (name `karina-proofread`) and sends its address.
+- I scan the whole history for student names and keys, then push.
+- She sets up Vercel and Neon and makes her password (guide, part 2), then I copy her data online.

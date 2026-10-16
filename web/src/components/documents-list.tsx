@@ -72,10 +72,7 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
   async function setStatus(job: Job, status: JobStatus) {
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     if (!res.ok) return toast.error("Could not update the document.");
-    if (status === "done") {
-      const body = (await res.json()) as { learned?: Learned; savedTo?: string };
-      toastDone(body.learned, () => router.push("/rules?tab=learned"), body.savedTo);
-    }
+    if (status === "done") toastDone(((await res.json()) as { learned?: Learned }).learned, () => router.push("/rules?tab=learned"));
     else toast.success("Back in review");
     router.refresh();
   }

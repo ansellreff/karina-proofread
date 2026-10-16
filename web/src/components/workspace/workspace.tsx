@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, CloudUpload, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, Save, ScanText, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, Save, ScanText, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -119,7 +119,7 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 /** First non-empty line, short enough for a text search. */
 const searchable = (s: string) => (s.split("\n").map((l) => l.trim()).find(Boolean) ?? "").slice(0, 80);
 
-export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online = false }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string; online?: boolean }) {
+export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string }) {
   const router = useRouter();
   const [job, setJob] = useState(initialJob);
   /** The version file fetched into the editor (changing it reloads the editor). */
@@ -488,23 +488,6 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
 
   async function exportAs(kind: "tracked" | "clean" | "pdf" | "pdf-markup") {
     const latest = dirty ? await save({ label: "Your edits" }) : job;
-    if (kind === "pdf" && online) {
-      // online: OneDrive makes the PDF (as Word for the web renders it); the print view stays the fallback
-      const id = toast.loading("Making the PDF in OneDrive…");
-      const res = await fetch(`/api/onedrive/pdf?job=${job.id}&v=${latest.current}`).catch(() => null);
-      toast.dismiss(id);
-      if (res?.ok) {
-        const url = URL.createObjectURL(await res.blob());
-        const name = /filename\*=UTF-8''([^;]+)/.exec(res.headers.get("content-disposition") ?? "")?.[1];
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = name ? decodeURIComponent(name) : "document.pdf";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        return;
-      }
-      toast("OneDrive couldn’t make the PDF, so the print view opens instead.");
-    }
     if (kind === "pdf" || kind === "pdf-markup") {
       window.open(`/jobs/${job.id}/print?v=${latest.current}&markup=${kind === "pdf-markup" ? 1 : 0}`, "_blank", "noopener");
       return;
@@ -512,15 +495,6 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
     download(`/api/jobs/${job.id}/file?v=${latest.current}&download=${kind}`);
   }
 
-  async function saveToOneDrive(kind: "tracked" | "clean" | "pdf") {
-    if (dirty) await save({ label: "Your edits" });
-    const id = toast.loading("Saving to OneDrive…");
-    const res = await fetch("/api/onedrive/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id, kind }) });
-    const json = (await res.json()) as { path?: string; error?: string };
-    toast.dismiss(id);
-    if (res.ok) toast.success(`Saved to OneDrive: ${json.path}`);
-    else toast.error(json.error ?? "Saving to OneDrive failed.");
-  }
 
   async function restore(n: number) {
     const res = await fetch(`/api/jobs/${job.id}/versions`, {
@@ -540,9 +514,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
     const latest = dirty ? await save({ label: "Your edits" }) : job;
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     if (res.ok) {
-      const { learned, savedTo, ...updated } = (await res.json()) as Job & { learned?: Learned; savedTo?: string };
+      const { learned, ...updated } = (await res.json()) as Job & { learned?: Learned };
       setJob({ ...updated, current: latest.current });
-      toastDone(learned, () => router.push("/rules?tab=learned"), savedTo);
+      toastDone(learned, () => router.push("/rules?tab=learned"));
     }
   }
 
@@ -837,23 +811,6 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
             <DropdownMenuItem onClick={() => exportAs("pdf-markup")}>PDF with markup</DropdownMenuItem>
             {job.sourceFile && (
               <DropdownMenuItem onClick={() => window.open(`/api/jobs/${job.id}/file?source=1`, "_blank", "noopener")}>The student’s PDF, as sent</DropdownMenuItem>
-            )}
-            {online && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Save to OneDrive (Done folder)</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => void saveToOneDrive("tracked")}>
-                    <CloudUpload /> Word with tracked changes
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void saveToOneDrive("clean")}>
-                    <CloudUpload /> Clean Word file
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void saveToOneDrive("pdf")}>
-                    <CloudUpload /> PDF, clean
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={markDone} disabled={job.status === "done"}>

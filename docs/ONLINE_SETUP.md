@@ -1,92 +1,61 @@
 # Putting the app online: your steps
 
-The app is ready for Microsoft sign-in and OneDrive. A few things can only be done with **your** accounts. Each part
-below takes 5–15 minutes. After each part, tell me and I'll continue from there.
+The app goes on **Vercel** (free Hobby plan), with your documents in a private **Neon** database connected
+through Vercel. You open it from any PC or phone with **your password**. There is no Microsoft or Azure step.
+You upload and download documents by hand, as now. All of it is free, and takes about 15 minutes.
 
-**Never paste a secret (client secret, API key) into the chat.** You type secrets yourself, only into the places
-named below.
+**Never paste a password, secret or API key into the chat.** You type those yourself, only where named below.
 
 ---
 
-## Part 1: Register the sign-in (Microsoft)
+## 1. GitHub (where the code lives)
+1. Create a free account at **https://github.com/signup**, using reffriandi@gmail.com.
+2. Open **https://github.com/new**:
+   - **Repository name:** `karina-proofread`
+   - **Private**
+   - Leave everything else unticked: no README, .gitignore or license.
+   - Press **Create repository**.
+3. Send me the address it shows, for example `https://github.com/<your-username>/karina-proofread`.
 
-Your Microsoft account is a personal one (outlook.com / hotmail.com / live.com). Microsoft only lets a personal
-account register an app inside a free "directory". You get that directory by creating a free Azure account.
+I then check the whole project history for student names and keys, and only when it is clean, push the code. The
+first time, Windows opens a GitHub sign-in in your browser: approve it there.
 
-### 1a. Free Azure account (once)
-1. Go to **https://azure.microsoft.com/free** and choose **Try Azure for free**. Sign in with your Microsoft account
-   (the one whose OneDrive the app should use).
-2. Microsoft asks for a phone number and a card. The card **only verifies your identity**:
-   - nothing is charged on the free account;
-   - the app registration costs nothing, then or later.
-3. When it finishes, you have a "Default Directory". Nothing else to set up there.
+## 2. Vercel (where the app runs)
+1. Sign up at **https://vercel.com/signup** with **Continue with GitHub**. Choose the **Hobby** plan (personal use).
+2. **Add New → Project**, pick `karina-proofread` and set:
+   - **Root Directory:** `web` (press Edit next to it)
+   - Leave the rest as it is. Don't deploy yet if it offers; the next two steps come first.
+3. In the project, **Storage → Create Database → Neon**, region **Singapore**, and connect it to the project.
+   This adds `DATABASE_URL` by itself.
+4. **Settings → Environment Variables:** add these three, for all environments:
 
-### 1b. Register the app
-1. Go to **https://entra.microsoft.com** (sign in with the same account).
-2. Open **Applications → App registrations → New registration**.
-   - **Name:** `Karina Proofread`
-   - **Supported account types:** **Personal Microsoft accounts only**
-   - **Redirect URI:** platform **Web**, address `http://localhost:3000/api/auth/callback`
-   - Press **Register**.
-3. On the page that opens (Overview), copy the **Application (client) ID**. You can send me this one: it is not
-   secret.
-4. Open **Certificates & secrets → Client secrets → New client secret**.
-   - **Description:** `app`
-   - **Expires:** 24 months
-   - Press **Add**.
+   | Name | Value |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | your Anthropic key (the same as in `web\.env.local` on this computer) |
+   | `APP_PASSWORD_HASH` | made in step 5 below |
+   | `AUTH_SECRET` | a long random string; I'll give you one |
 
-   Copy the **Value** right away (it is shown only once). This one **is secret**: keep it for step 1c, and don't
-   send it to me.
-5. Open **API permissions → Add a permission → Microsoft Graph → Delegated permissions**. Tick these, then press
-   **Add permissions**:
-   - `Files.ReadWrite`
-   - `offline_access`
-   - `openid`
-   - `profile`
-   - `email`
+5. **Your password.** In VS Code, open a terminal in the project and run:
+   ```
+   . .\dev.ps1; cd web; npx tsx scripts/password-hash.ts
+   ```
+   Type your new password twice (the typing is hidden). Copy the long line it prints after `APP_PASSWORD_HASH=`
+   into Vercel. The password itself is never saved anywhere; only this scrambled version is.
+6. **Deployments → Redeploy.** Vercel shows the app's address, for example `karina-proofread.vercel.app`.
 
-   `User.Read` is already there.
+## 3. Your documents online
+Tell me when the app is up. I'll copy your current documents (every version), rules, AI rulebook, learning data and
+AI usage from this computer into the online app, once. The copy on this computer stays as a backup.
 
-### 1c. Put the values on this computer
-Open the file `web\.env.local` in this project (with Notepad or VS Code). It already has your Anthropic key; leave
-that line as it is. Add these two lines at the end:
+## 4. On your phone
+Open the address in Chrome (Android) or Safari (iPhone), sign in, then choose **Add to Home screen**. The app opens
+full screen like any other app. Each device stays signed in for 30 days; **Settings → Sign out** ends it.
 
-```
-MS_CLIENT_ID=<the Application (client) ID>
-MS_CLIENT_SECRET=<the secret Value>
-```
+---
 
-Save the file, then tell me. I'll add the other settings (the cookie key, your allowed account, the address).
-
-## Part 2: Your project folder in OneDrive
-1. In **https://onedrive.live.com**, create a folder for the app, for example `Karina Proofread`, wherever you like.
-2. Leave it empty. When you first sign in to the app, you choose this folder. The app then creates three folders
-   inside it:
-   - **Inbox:** new student files; the app imports them from here.
-   - **Done:** finished files (`DONE_…`).
-   - **App data:** the app's own working files. Don't edit these by hand.
-
-After that, **Settings → OneDrive** has a button that copies your current documents, rules and learning data from this
-computer into OneDrive. You asked to do this only once the folder is set up, so it is one click, whenever you're
-ready. The copy on this computer stays as a backup.
-
-## Part 3: GitHub and Vercel (for the online address)
-1. **GitHub:** create a free account at **https://github.com/signup**, then a **new repository**:
-   - **Name:** `karina-proofread`
-   - **Visibility:** **Private**
-   - Don't add a README or anything else (it must be empty).
-
-   Send me the repository's address (for example `https://github.com/<you>/karina-proofread`).
-2. **Vercel:** sign up at **https://vercel.com/signup** with **Continue with GitHub**, on the free **Hobby** plan.
-
-Then I:
-1. check that no student names or keys are anywhere in the project's history;
-2. push the code;
-3. walk you through **Import project** on Vercel:
-   - **Root directory:** `web`;
-   - the **Environment variables**, which you type in yourself;
-   - adding the online address to the app registration (step 1b, **Authentication → Add URI**).
-
-## Part 4: On your phone
-Open the online address in Chrome (Android) or Safari (iPhone), sign in, and choose **Add to Home screen**. The app then
-opens full screen like any other app.
+**Good to know**
+- **Wrong passwords:** after 5 wrong tries within 15 minutes, sign-in waits 15 minutes for that connection.
+- **Changing the password:** run step 5 again, replace `APP_PASSWORD_HASH` in Vercel, and redeploy.
+- **Updates:** I commit changes on this computer, show you what changed, and push only when you say so. Each push
+  updates the online app by itself.
+- **On this computer:** the app also keeps working at http://localhost:3000, with its own local files.

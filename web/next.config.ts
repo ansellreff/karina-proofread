@@ -4,8 +4,8 @@ const dev = process.env.NODE_ENV !== "production";
 
 /**
  * The browser may only talk to this app (connect-src 'self'). Student documents never leave it from the
- * browser, even if a library tried to send telemetry. AI and OneDrive calls happen on the server, and Microsoft
- * sign-in is a plain link (a top-level navigation), so form-action stays 'self'.
+ * browser, even if a library tried to send telemetry. AI and database calls happen on the server; the sign-in
+ * form posts to this app (form-action 'self').
  */
 const csp = [
   "default-src 'self'",
@@ -22,7 +22,7 @@ const csp = [
 
 const nextConfig: NextConfig = {
   // large WebAssembly bundle / PDF reader with its own worker: load them from node_modules at runtime
-  serverExternalPackages: ["harper.js", "pdfjs-dist"],
+  serverExternalPackages: ["harper.js", "pdfjs-dist", "@electric-sql/pglite"],
   // read at runtime (not imported), so they must be bundled explicitly for Vercel: the bundled rules, AI rulebook and
   // examples (defaults until Karina saves her own in OneDrive) and pdf.js's worker and fonts (PDF uploads)
   outputFileTracingIncludes: {
@@ -36,7 +36,8 @@ const nextConfig: NextConfig = {
   },
   // never ship local student data or backups, even from a build made on this computer
   outputFileTracingExcludes: {
-    "/*": ["./.data/**/*", "./prompts/*.backup.*", "./e2e-shots/**/*"],
+    // PGlite (Postgres for tests and local trials) is never used online, where Neon is the database
+    "/*": ["./.data/**/*", "./prompts/*.backup.*", "./e2e-shots/**/*", "./node_modules/@electric-sql/**/*"],
   },
   async headers() {
     return [

@@ -1,5 +1,4 @@
 import { learnFromJob } from "@/lib/learn/learn";
-import { saveToDone } from "@/lib/onedrive/project";
 import { stores } from "@/lib/storage/stores";
 import type { Job } from "@/lib/store/types";
 
@@ -26,25 +25,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;
   job.updatedAt = new Date().toISOString();
   await store.save(job);
+  // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
   let learned: Awaited<ReturnType<typeof learnFromJob>> = null;
-  let savedTo: string | null = null;
   if (body.status === "done") {
-    // Online, the finished file goes to the Done folder in OneDrive (tracked changes, Karina's file name).
-    if (st.mode === "onedrive") {
-      try {
-        savedTo = await saveToDone(st, job, "tracked");
-      } catch (e) {
-        console.error("saving to OneDrive Done failed", e);
-      }
-    }
-    // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
     try {
       learned = await learnFromJob(job, store, st.learn, await st.config.loadRules());
     } catch (e) {
       console.error("learning from a finished document failed", e);
     }
   }
-  return Response.json({ ...job, ...(learned ? { learned } : {}), ...(savedTo ? { savedTo } : {}) });
+  return Response.json(learned ? { ...job, learned } : job);
 }
 
 /** Moves the document to the trash (it can be restored from "Recently deleted"). */

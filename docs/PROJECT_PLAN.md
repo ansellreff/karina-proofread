@@ -1,6 +1,6 @@
 # Karina Proofread Bot — Project Plan
 
-_Last updated: 2026-10-16 (M4 started: Phase A done; waiting for Karina's account steps)_
+_Last updated: 2026-10-17 (M4 re-planned without Microsoft/OneDrive: Vercel + password + Neon; built and tested; waiting for Karina's GitHub/Vercel steps)_
 
 ## What we are building
 
@@ -11,11 +11,10 @@ Word tracked changes and notes, all authored "Karina Octavia", with no trace of 
 
 The flow when it's finished:
 
-1. A student emails a document with a keyword in the subject. It lands automatically in OneDrive → `Karina Proofread/Inbox`.
-2. Karina opens the web app (PC or phone), picks the file, and runs the bot.
-3. The bot proofreads in her style. Karina reviews everything in a Word-like editor: accept, reject, edit,
+1. Karina opens the web app (any PC or her phone) and uploads the student's Word or PDF file.
+2. The bot proofreads in her style. Karina reviews everything in a Word-like editor: accept, reject, edit,
    highlight, comment, or restore the original.
-4. She exports DOCX (with tracked changes, or clean) or PDF, saved to OneDrive → `Done`.
+3. She downloads the result: DOCX (with tracked changes, or clean) or PDF, and sends it to the student herself.
 
 ## How the proofreading works
 
@@ -37,11 +36,10 @@ Every rule is checked against Karina's real edits on 6 test documents that the b
 | Degree names | Lower case ("bachelor's degree in chemistry") unless at the start of a sentence after a full stop |
 | Spelling | British spellings are kept ("programme", "behaviour"), because Karina doesn't change them |
 | Review editor | SuperDoc (works directly on the Word file), with "Open in Word for the web" as a fallback |
-| PDF | Microsoft Graph conversion (works on OneDrive Personal), with browser print as a fallback and for "PDF with markup" |
-| Storage / sign-in | Personal OneDrive through Microsoft Graph is the **only** storage online (documents, versions, rules, learning, usage), so nothing sits with another service. Sign-in: Microsoft personal accounts, limited to Karina. The app registration needs a free Azure account, which provides the directory. The app also runs locally without sign-in for development |
-| Deploy | Private GitHub repository → Vercel (Hobby). Before the first push, the whole git history is scanned for student names and keys |
-| Email intake | Google Apps Script; check interval and keyword editable in the app's Settings |
-| Hosting | Vercel Hobby (free, personal use) |
+| PDF | Browser print view (clean or with markup) |
+| Storage / sign-in | **Online:** Neon Postgres connected through Vercel (region Singapore), holding the documents, versions, rules, learning and usage, with Karina's password as the sign-in. **No OneDrive or Microsoft sign-in:** Microsoft refused her free Azure account, and Azure was required for that. She uploads and downloads files by hand. **Locally,** the app still runs on this PC without sign-in |
+| Deploy | Private GitHub repository → Vercel. Before the first push, the whole git history is scanned for student names and keys. Afterwards, every push (only with her OK) redeploys |
+| Hosting | Vercel Hobby (free: personal, unpaid use, as Karina confirmed). Functions run in Singapore |
 | Rules | Karina's rules live in `web/prompts/karina-rules.json`, edited on the Review rules page; engine, AI and score all read it |
 | Score | 0–100 without AI: grammar 35, clarity 15, formatting 20, structure 30. Karina's notes don't count; open bot fixes do |
 | Learning | No AI, no cost. Proposals need repeated evidence (a fix 3+ times in 2+ documents and right 80%+ of the time; a rule undone 70%+ of the time, also in her newest documents). Nothing changes until she approves. The 6 test documents are never learned from |
@@ -61,8 +59,8 @@ Each milestone ends with a review by Karina before the next one starts.
 | M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100**, resizable/collapsible panel, drag-and-drop side-by-side, **PDF input** | ✅ Done (2026-10-16): 43/43 browser checks, waiting for Karina's review |
 | M3++ | UI/UX round: **dark mode** (white or dark paper), documents search/filter/rename/delete+restore, review shortcuts, save status, view menu, tips, app icon | ✅ Done (2026-10-16): 52/52 browser checks, waiting for Karina's review |
 | M3+++ | **Learning loop** (local): every finished document teaches the bot; proposals (new rules, rules to switch off, AI examples) wait for Karina's approval on Review rules → From your reviews | ✅ Done (2026-10-16): 57/57 browser checks, waiting for Karina's review |
-| M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | 🔄 Phase A (built and tested without accounts) ✅ 2026-10-16. Next: Karina's steps in [ONLINE_SETUP.md](ONLINE_SETUP.md), then Phase B (OneDrive with her account) and C (deploy) |
-| M5 | Gmail auto-intake (learning loop and PDF input already done locally) | ⏳ |
+| M4 | **Online on Vercel:** password sign-in, Neon database, AI costs page, phone install (re-planned 2026-10-17 without OneDrive) | 🔄 Built and tested locally (online mode against Postgres: 15/15; local: 58/58). Next: Karina's GitHub and Vercel steps ([ONLINE_SETUP.md](ONLINE_SETUP.md)), then push, deploy and copy her data |
+| M5 | Email intake (open: OneDrive is out; to be re-thought if still wanted) | ⏳ |
 
 ### M2 — Claude layer
 - Claude proofreads in Karina's voice, following [web/prompts/karina-style-guide.md](../web/prompts/karina-style-guide.md) and anonymised examples.
@@ -87,11 +85,15 @@ Each milestone ends with a review by Karina before the next one starts.
 - Style rulebook page (view and edit the rules) and a Settings page.
 
 ### M4 — Online
-- Microsoft sign-in, OneDrive browse/pick/save, autosave to `In Review/`, export to `Done/`.
-- PDF through Microsoft Graph. Deploy on Vercel. Install as an app on the phone. Cost tracker page.
+- The app on Vercel, opened from any PC or phone, behind Karina's password.
+- Documents, versions, rules, learning and usage in a Neon database (Singapore).
+- Upload and download by hand. PDF through the print view.
+- Install on the phone (Add to Home screen). AI costs page.
+- Her local data copied online once.
+- _Dropped:_ Microsoft sign-in and OneDrive. A personal account needs an Azure directory, and Microsoft refused her free Azure account.
 
-### M5 — Automation and learning
-- Gmail → OneDrive intake with an adjustable interval (every 1/5/10/15/30 minutes or every 1–12 hours) and keyword.
+### M5 — Automation
+- Email intake: the earlier plan went through OneDrive, so it is open now. If she still wants it, it will be re-planned around the online app.
 - ~~Learning loop~~ and ~~PDF/CV input~~: done locally ahead of time (M3+++ and M3+).
 
 ## What Karina provides, and when
@@ -99,5 +101,4 @@ Each milestone ends with a review by Karina before the next one starts.
 | Item | Milestone |
 |---|---|
 | Anthropic API key (with spend limit) | M2 |
-| Microsoft Entra app registration, GitHub private repo, Vercel account | M4 |
-| Paste the Apps Script into Google Apps Script and authorise it once | M5 |
+| GitHub private repository, Vercel account (Hobby) with a Neon database, her app password | M4 |

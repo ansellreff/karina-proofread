@@ -1,6 +1,6 @@
 /**
  * Where the app keeps its files. One interface, two backends: a local folder (web/.data, development and tests)
- * and Karina's OneDrive (online). Paths are relative and use "/" ("jobs/<id>/v3.docx").
+ * and a Postgres table (online, Neon). Paths are relative and use "/" ("jobs/<id>/v3.docx").
  */
 
 export interface FileInfo {
@@ -11,7 +11,7 @@ export interface FileInfo {
 }
 
 export interface AppFiles {
-  readonly kind: "local" | "onedrive";
+  readonly kind: "local" | "cloud";
   /** The file's bytes, or null when it doesn't exist. */
   read(path: string): Promise<Uint8Array | null>;
   /** Create or replace a file (missing folders are created). */
