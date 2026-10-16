@@ -11,7 +11,7 @@ import { StyleResolver } from "./docx/styles";
 import { wDescendants, type Document } from "./docx/xml";
 import { KARINA } from "./identity";
 import type { RuleConfig } from "./rules/config";
-import { loadRules } from "./rules/config-store";
+import { localStores } from "./storage/local";
 import { buildContext, detectName } from "./rules/detect";
 import { planFormatting, type FormatPlan } from "./rules/format";
 import { grammarEdits } from "./rules/grammar";
@@ -24,7 +24,12 @@ export interface AiOptions {
   model?: string;
   effort?: Effort;
   client?: ReviewClient;
+  /** The system prompt (systemPrompt(stores)); the command-line scripts leave it out and get the local one. */
+  system?: string;
 }
+
+const systemOf = async (ai: AiOptions) => ai.system ?? (await systemPrompt(localStores()));
+const rulesOf = async (opts: ProofreadOptions) => opts.rules ?? (await localStores().config.loadRules());
 
 export interface ProofreadOptions {
   fileName: string;
@@ -33,7 +38,7 @@ export interface ProofreadOptions {
   now?: Date;
   /** Include Harper (offline grammar checker) suggestions, limited to the kinds set on the Review rules page. Default true. */
   grammar?: boolean;
-  /** Karina's review rules. Default: the saved rules (web/prompts/karina-rules.json). */
+  /** Karina's review rules (stores.config.loadRules()). Default, for the command-line scripts: web/prompts/karina-rules.json. */
   rules?: RuleConfig;
   /** Claude layer. Omit or false for the rules engine only. */
   ai?: AiOptions | false;
@@ -91,7 +96,7 @@ async function prepare(input: Uint8Array | ArrayBuffer, opts: ProofreadOptions):
   const acceptedExisting = acceptAllRevisions(doc);
   const styles = new StyleResolver(await pkg.xml("word/styles.xml"));
   const paras = bodyParagraphs(doc);
-  const ctx = buildContext(opts.fileName, paras, opts.docType, opts.rules ?? (await loadRules()));
+  const ctx = buildContext(opts.fileName, paras, opts.docType, await rulesOf(opts));
   const format = planFormatting(ctx, paras, styles);
   const extra: TextEdit[] = opts.grammar === false ? [] : await grammarEdits(ctx);
   const rules = runRules(ctx, { formatDeviated: format.deviated, tables: wDescendants(doc, "tbl").length }, extra);
@@ -133,7 +138,7 @@ export async function estimateAiCost(input: Uint8Array | ArrayBuffer, opts: Proo
   const ai = opts.ai || {};
   const model = ai.model ?? DEFAULT_MODEL;
   const client = ai.client ?? new AnthropicReviewClient();
-  const counted = await client.countTokens({ system: systemPrompt(), user: userPrompt(p.ctx, ruleChangeRecords(p)), model });
+  const counted = await client.countTokens({ system: await systemOf(ai), user: userPrompt(p.ctx, ruleChangeRecords(p)), model });
   const words = p.ctx.paras.reduce((n, x) => n + x.words, 0);
   return estimateCost(model, counted.total, counted.system, words);
 }
@@ -163,7 +168,7 @@ export async function recheckPassage(passage: string, docType: DocType, ai: AiOp
     paras: paras.map((text, index) => ({ index, text, words: text.split(/\s+/).length, sentences: 1, inTable: false, isList: false, isShort: false })),
   };
   const user = `${userPrompt(ctx, [])}\n\nThis is only a passage Karina selected for a second look, not the whole document. Do not add end_note_items, suggestion_paragraphs or paragraph_deletions; use replacements and insertions only.`;
-  const res = await client.review({ system: systemPrompt(), user, model, effort: ai.effort ?? "high" });
+  const res = await client.review({ system: await systemOf(ai), user, model, effort: ai.effort ?? "high" });
   const edits: PassageEdit[] = [];
   for (const r of res.review.replacements) {
     if (r.find && r.find !== r.replace) edits.push({ find: r.find, replace: r.replace, kind: "fix", reason: r.reason, beyondStyle: r.beyond_style });
@@ -194,7 +199,7 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
     const model = opts.ai.model ?? DEFAULT_MODEL;
     const client = opts.ai.client ?? new AnthropicReviewClient();
     opts.onStage?.("claude");
-    const res = await client.review({ system: systemPrompt(), user: userPrompt(ctx, ruleChangeRecords(p)), model, effort: opts.ai.effort ?? "high" });
+    const res = await client.review({ system: await systemOf(opts.ai), user: userPrompt(ctx, ruleChangeRecords(p)), model, effort: opts.ai.effort ?? "high" });
     const mapped = mapReview(res.review, ctx);
     deletions = mapped.deletions;
     for (const [k, v] of mapped.reasons) reasons.set(k, v);

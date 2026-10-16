@@ -1,11 +1,12 @@
 import { learnFromJob } from "@/lib/learn/learn";
-import { getStore } from "@/lib/store/fs-store";
+import { saveToDone } from "@/lib/onedrive/project";
+import { stores } from "@/lib/storage/stores";
 import type { Job } from "@/lib/store/types";
 
 export const runtime = "nodejs";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const job = await getStore().get((await ctx.params).id);
+  const job = await (await stores()).jobs.get((await ctx.params).id);
   return job ? Response.json(job) : Response.json({ error: "Document not found." }, { status: 404 });
 }
 
@@ -13,7 +14,8 @@ const STATUSES: Job["status"][] = ["new", "proofreading", "ready", "done"];
 
 /** Update status or student name (the name is used in the DONE_ file names). */
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const store = getStore();
+  const st = await stores();
+  const store = st.jobs;
   const job = await store.get((await ctx.params).id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
   const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">>;
@@ -24,20 +26,29 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;
   job.updatedAt = new Date().toISOString();
   await store.save(job);
-  // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
   let learned: Awaited<ReturnType<typeof learnFromJob>> = null;
+  let savedTo: string | null = null;
   if (body.status === "done") {
+    // Online, the finished file goes to the Done folder in OneDrive (tracked changes, Karina's file name).
+    if (st.mode === "onedrive") {
+      try {
+        savedTo = await saveToDone(st, job, "tracked");
+      } catch (e) {
+        console.error("saving to OneDrive Done failed", e);
+      }
+    }
+    // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
     try {
-      learned = await learnFromJob(job, store);
+      learned = await learnFromJob(job, store, st.learn, await st.config.loadRules());
     } catch (e) {
       console.error("learning from a finished document failed", e);
     }
   }
-  return Response.json(learned ? { ...job, learned } : job);
+  return Response.json({ ...job, ...(learned ? { learned } : {}), ...(savedTo ? { savedTo } : {}) });
 }
 
 /** Moves the document to the trash (it can be restored from "Recently deleted"). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const trashed = await getStore().remove((await ctx.params).id);
+  const trashed = await (await stores()).jobs.remove((await ctx.params).id);
   return Response.json({ trashed });
 }

@@ -1,13 +1,15 @@
 import { DocumentsList } from "@/components/documents-list";
+import { OneDriveInbox } from "@/components/onedrive-inbox";
 import { UploadZone } from "@/components/upload-zone";
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documents" };
 
 export default async function Inbox(props: PageProps<"/">) {
   const params = await props.searchParams;
-  const jobs = await getStore().list();
+  const st = await stores();
+  const jobs = await st.jobs.list();
   const waiting = jobs.filter((j) => j.status === "new").length;
   const ready = jobs.filter((j) => j.status === "ready").length;
   const q = typeof params.q === "string" ? params.q : "";
@@ -26,6 +28,7 @@ export default async function Inbox(props: PageProps<"/">) {
         </p>
       </div>
       <UploadZone />
+      {st.mode === "onedrive" && <OneDriveInbox />}
       <DocumentsList jobs={jobs} initialQuery={q} initialTab={status} />
     </main>
   );

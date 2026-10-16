@@ -1,10 +1,10 @@
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 import type { Settings } from "@/lib/store/types";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const store = getStore();
+  const store = (await stores()).jobs;
   const settings = await store.getSettings();
   const usage = await store.usage();
   const spent = await store.spendSince(settings.balanceSetAt);
@@ -20,7 +20,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const store = getStore();
+  const store = (await stores()).jobs;
   const current = await store.getSettings();
   const body = (await request.json()) as Partial<Settings>;
   const next: Settings = { ...current, ...body };

@@ -522,3 +522,63 @@ While cleaning up after a crashed test, I deleted every document in the local ap
   - **Cost:** the examples add about 1,060 tokens, cached, so less than one US cent per document.
   - **Not approved for you:** each example is your own edit, and you decide which ones the AI should copy. Approve the ones that really are your style.
 - For tests only: `KP_LEARN_DIR` points the AI prompt at another learning folder (never set in the app).
+
+## M4 Phase A: ready to go online, built and tested without accounts (2026-10-16)
+
+**Decisions (Karina):**
+- personal Microsoft account (OneDrive Personal);
+- code on a private GitHub repository linked to Vercel;
+- copy her local documents to OneDrive only after she has set up the project folder.
+
+### What changed for the app
+- **One way to keep files, two places:**
+  - **Locally** (no sign-in, as now), everything stays in `web/.data` on this computer.
+  - **Online**, everything goes to her **OneDrive project folder**: documents with every version, Recently deleted, settings, AI usage, rules, AI rulebook and learning data. No other service keeps any of it.
+  - The local copy works exactly as before.
+- **Sign in with Microsoft** (only her account is let in).
+  - The sign-in is kept in an encrypted cookie and renews itself.
+  - There is a Sign out button.
+  - The first visit asks for the **project folder**; the app creates **Inbox**, **Done** and **App data** inside it.
+- **OneDrive in the app:**
+  - The **Documents page** lists files waiting in **Inbox** with an **Import** button. Imported files move to **Inbox/Imported**. M5's email intake will drop files there.
+  - **Mark as done** also saves the `DONE_…docx` (tracked) to **Done**.
+  - **The Export menu:**
+    - **Save to OneDrive (Done folder):** Word with tracked changes, clean Word, PDF;
+    - **PDF, clean:** made by OneDrive itself (the same rendering as Word for the web); the print view stays the fallback and is used for "PDF with markup".
+  - **Settings → OneDrive:**
+    - the signed-in account;
+    - **Change the project folder**;
+    - **Copy this computer's data to OneDrive** (one click, when she's ready; nothing in OneDrive is overwritten and the local copy stays as a backup);
+    - **Sign out**.
+- **AI costs page** (new, in the header):
+  - this month, the average cost of one AI run, and the balance left with how many runs it still covers;
+  - a bar per month for the last 12 months, plus the table;
+  - cost per document.
+- **Phone install:** an app icon and the information phones need for **Add to Home screen**. The app opens full screen.
+
+### Safety
+- **Student data never leaves through the build.** The build was set up to bundle the rules, rulebook and PDF tools. A check found it would also have bundled the local `web/.data` folder (student documents) when built on this computer, because the app reads that folder at runtime. That is now explicitly excluded, and verified: no student file in any server bundle.
+- **The 6 test documents** are now recognised by a fingerprint of their content instead of their file names, so the guard also works online and the code contains no names.
+- **Pages and the API both require the sign-in** online; local mode stays unchanged for development and the tests.
+- **A proofread cut off by the server** (online functions have a time limit) no longer leaves a document stuck on "proofreading"; after 6 minutes it shows as not proofread, so it can be run again.
+
+### Verified
+- **81 unit tests** (22 new):
+  - the document store, run the same way on memory and on a simulated OneDrive (create, versions, delete and restore, the list, monthly usage);
+  - large uploads in chunks and OneDrive throttling;
+  - Done, PDF and folder setup;
+  - sign-in: allowed versus other accounts, cookie encryption and splitting, token renewal;
+  - the page guard (proxy);
+  - the cost totals.
+- **57/57 end-to-end checks** in local mode. The test now waits for delete/undo instead of a fixed second; renaming a folder on Windows takes about 0.8 seconds.
+- Lint, type check and the production build pass. Proofreading output is unchanged.
+- Karina's 5 documents, the 32 learned reviews and her rules were untouched throughout.
+
+### Next: her steps
+**Next: her steps** ([ONLINE_SETUP.md](ONLINE_SETUP.md)):
+1. A free Azure account, which is needed for a personal account to register an app.
+2. The app registration (about 10 minutes).
+3. Her OneDrive project folder.
+4. Later: GitHub and Vercel.
+
+Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on her phone).

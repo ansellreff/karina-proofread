@@ -1,8 +1,8 @@
+import { systemPrompt } from "@/lib/ai/prompt";
 import { KARINA } from "@/lib/identity";
 import { proofreadDocx } from "@/lib/pipeline";
-import { loadRules } from "@/lib/rules/config-store";
 import { proofreadScores } from "@/lib/score/job-score";
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -12,13 +12,14 @@ export const maxDuration = 300;
  * Body: { ai: boolean }. Streams NDJSON progress lines: {stage} ... then {done, job} or {error}.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const store = getStore();
+  const st = await stores();
+  const store = st.jobs;
   const id = (await ctx.params).id;
   const job = await store.get(id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
   const { ai } = (await request.json().catch(() => ({}))) as { ai?: boolean };
   const settings = await store.getSettings();
-  if (ai && !process.env.ANTHROPIC_API_KEY) return Response.json({ error: "No Anthropic API key is set (web/.env.local)." }, { status: 400 });
+  if (ai && !process.env.ANTHROPIC_API_KEY) return Response.json({ error: "No Anthropic API key is set (ANTHROPIC_API_KEY)." }, { status: 400 });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -26,12 +27,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       try {
         job.status = "proofreading";
+        job.updatedAt = new Date().toISOString();
         await store.save(job);
-        const original = await store.readVersion(id, 0);
+        const [original, rules, system] = await Promise.all([store.readVersion(id, 0), st.config.loadRules(), ai ? systemPrompt(st) : undefined]);
         const result = await proofreadDocx(original, {
           fileName: job.fileName,
           identity: { ...KARINA, author: settings.authorName },
-          ai: ai ? { model: settings.model, effort: settings.effort } : false,
+          rules,
+          ai: ai ? { model: settings.model, effort: settings.effort, system } : false,
           onStage: (stage) => send({ stage }),
         });
         const updated = await store.addVersion(id, result.output, {
@@ -53,7 +56,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           dropped: result.ai?.dropped,
         };
         try {
-          updated.proofread.score = await proofreadScores(updated, original, result.output, result.changes, await loadRules());
+          updated.proofread.score = await proofreadScores(updated, original, result.output, result.changes, rules);
           updated.score = { total: updated.proofread.score.original.total, at: updated.proofread.at };
         } catch (e) {
           console.warn("scoring failed", e); // the proofread itself is fine; the score just stays empty
@@ -65,7 +68,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         send({ done: true, job: updated });
       } catch (e) {
         job.status = job.versions.length > 1 ? "ready" : "new";
-        await store.save(job);
+        await store.save(job).catch(() => {});
         send({ error: e instanceof Error ? e.message : "Proofreading failed." });
       } finally {
         controller.close();

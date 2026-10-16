@@ -1,8 +1,7 @@
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
 
-/** Recently deleted documents (restorable). */
 export async function GET() {
-  return Response.json(await getStore().listTrash());
+  return Response.json(await (await stores()).jobs.listTrash());
 }

@@ -1,13 +1,15 @@
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function GET() {
-  return Response.json(await getStore().list());
+  return Response.json(await (await stores()).jobs.list());
 }
 
 /** Upload one or more .docx or .pdf files (multipart field "files"). PDFs are converted to Word. */
 export async function POST(request: Request) {
+  const store = (await stores()).jobs;
   const form = await request.formData();
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   if (!files.length) return Response.json({ error: "Choose a Word (.docx) or PDF file to upload." }, { status: 400 });
@@ -19,7 +21,7 @@ export async function POST(request: Request) {
       continue;
     }
     try {
-      created.push(await getStore().create(f.name, new Uint8Array(await f.arrayBuffer())));
+      created.push(await store.create(f.name, new Uint8Array(await f.arrayBuffer())));
     } catch (e) {
       errors.push(`${f.name}: ${e instanceof Error ? e.message : "could not be read"}`);
     }

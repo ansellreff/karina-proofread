@@ -1,6 +1,5 @@
 /** Turn finished documents into learned records, and summarise what was learned. */
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { createHash } from "node:crypto";
 import { acceptAllRevisions } from "../docx/accept";
 import { DocxPackage } from "../docx/package";
 import { bodyParagraphs, type Para } from "../docx/paragraphs";
@@ -8,13 +7,13 @@ import { rejectAllRevisions } from "../docx/reject";
 import { getW, wDescendants } from "../docx/xml";
 import { ruleSuggestions } from "../pipeline";
 import type { RuleConfig } from "../rules/config";
-import { loadRules } from "../rules/config-store";
 import { buildContext, detectName } from "../rules/detect";
 import type { DocType } from "../rules/types";
 import type { Job, JobStore } from "../store/types";
+import { HOLDOUT_SHA256 } from "./holdout";
 import { hash, learnStats, propose, type LearnedExample, type LearnStats, type Proposal, type Tally } from "./proposals";
 import { botOutcomes, netEdits, type LearnedRecord } from "./record";
-import { getLearnStore, type LearnStore } from "./store";
+import type { LearnStore } from "./store";
 
 export class LearnError extends Error {}
 
@@ -31,14 +30,8 @@ async function readParas(data: Uint8Array, mode: "accept" | "reject"): Promise<{
   return { pkg, paras: bodyParagraphs(doc), revisions: marks.length, lastRevision };
 }
 
-/** File names of the 6 test documents (training/holdout.txt). The bot never learns from them. */
-export function holdoutNames(): Set<string> {
-  // local only (gitignored, outside the app): never traced into the build
-  for (const p of [path.join(/*turbopackIgnore: true*/ process.cwd(), "..", "training", "holdout.txt"), path.join(/*turbopackIgnore: true*/ process.cwd(), "training", "holdout.txt")]) {
-    if (existsSync(/*turbopackIgnore: true*/ p)) return new Set(readFileSync(/*turbopackIgnore: true*/ p, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean));
-  }
-  return new Set();
-}
+/** Is this one of the 6 test documents used to measure accuracy (by its content's fingerprint)? */
+export const isHoldout = (data: Uint8Array) => HOLDOUT_SHA256.has(createHash("sha256").update(data).digest("hex"));
 
 function buildRecord(base: Omit<LearnedRecord, "text" | "starts" | "edits" | "outcomes" | "learnedAt">, orig: string[], fin: string[], changes: Parameters<typeof botOutcomes>[0]): LearnedRecord {
   const { text, starts, edits } = netEdits(orig, fin);
@@ -49,11 +42,11 @@ function buildRecord(base: Omit<LearnedRecord, "text" | "starts" | "edits" | "ou
  * A document Karina marked as done in the app: the student's original (v0) against what she sends (the current
  * version with every remaining suggestion accepted), and the bot's suggestions from its proofread.
  */
-export async function recordFromJob(job: Job, jobs: JobStore, rules?: RuleConfig): Promise<LearnedRecord | null> {
+export async function recordFromJob(job: Job, jobs: JobStore, rules: RuleConfig): Promise<LearnedRecord | null> {
   if (job.current === 0) return null; // nothing was proofread or edited
   const orig = await readParas(await jobs.readVersion(job.id, 0), "accept");
   const fin = await readParas(await jobs.readVersion(job.id, job.current), "accept");
-  const ctx = buildContext(job.fileName, orig.paras, job.docType, rules ?? (await loadRules()));
+  const ctx = buildContext(job.fileName, orig.paras, job.docType, rules);
   const names = [job.studentName, detectName(ctx)].filter((n): n is string => !!n);
   return buildRecord(
     { id: `job-${job.id}`, source: "job", jobId: job.id, fileName: job.fileName, docType: job.docType, names, reviewedAt: job.updatedAt },
@@ -68,14 +61,12 @@ export async function recordFromJob(job: Job, jobs: JobStore, rules?: RuleConfig
  * rejected, her final is the file with every change accepted, and the bot's suggestions come from running the
  * rules engine on the original.
  */
-export async function recordFromReview(fileName: string, data: Uint8Array, docType?: DocType, rules?: RuleConfig): Promise<LearnedRecord> {
-  if (holdoutNames().has(path.basename(fileName))) {
-    throw new LearnError("This is one of the 6 test documents used to measure the bot’s accuracy, so it never learns from it.");
-  }
+export async function recordFromReview(fileName: string, data: Uint8Array, docType: DocType | undefined, rules: RuleConfig): Promise<LearnedRecord> {
+  if (isHoldout(data)) throw new LearnError("This is one of the 6 test documents used to measure the bot’s accuracy, so it never learns from it.");
   const rejected = await readParas(data, "reject");
   if (!rejected.revisions) throw new LearnError("This file has no tracked changes, so there is nothing to learn from. Upload the version with your tracked changes.");
   const original = await rejected.pkg.save();
-  const bot = await ruleSuggestions(original, { fileName, docType, rules: rules ?? (await loadRules()) });
+  const bot = await ruleSuggestions(original, { fileName, docType, rules });
   const fin = await readParas(data, "accept");
   return buildRecord(
     {
@@ -106,8 +97,7 @@ export interface LearnSummary {
   examples: LearnedExample[];
 }
 
-export async function learnSummary(learn: LearnStore = getLearnStore(), rules?: RuleConfig): Promise<LearnSummary> {
-  const config = rules ?? (await loadRules());
+export async function learnSummary(learn: LearnStore, config: RuleConfig): Promise<LearnSummary> {
   const records = await learn.list();
   const state = await learn.state();
   return {
@@ -127,8 +117,7 @@ export async function learnSummary(learn: LearnStore = getLearnStore(), rules?: 
 }
 
 /** Learn from a job that was just marked done; returns how many open proposals draw on it. */
-export async function learnFromJob(job: Job, jobs: JobStore, learn: LearnStore = getLearnStore()): Promise<{ record: string; proposals: number } | null> {
-  const rules = await loadRules();
+export async function learnFromJob(job: Job, jobs: JobStore, learn: LearnStore, rules: RuleConfig): Promise<{ record: string; proposals: number } | null> {
   const rec = await recordFromJob(job, jobs, rules);
   if (!rec) return null;
   await learn.save(rec);

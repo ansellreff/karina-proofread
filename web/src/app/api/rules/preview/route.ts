@@ -1,11 +1,13 @@
 import { validateRules, withDefaults, type RuleConfig } from "@/lib/rules/config";
 import { previewRules } from "@/lib/rules/preview";
 import type { DocType } from "@/lib/rules/types";
+import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
 
 /** Try the rules (as currently edited, saved or not) on pasted text. Free: no AI. */
 export async function POST(request: Request) {
+  await stores(); // signed in (online)
   const { text, docType, rules } = (await request.json()) as { text?: string; docType?: DocType; rules?: Partial<RuleConfig> };
   if (!text?.trim()) return Response.json({ changes: [] });
   const config = withDefaults(rules);

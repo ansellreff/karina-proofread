@@ -489,12 +489,19 @@ try {
   await actions().click();
   await dp.getByRole("menuitem", { name: "Delete" }).click();
   await dp.locator("[data-sonner-toast]").getByRole("button", { name: "Undo" }).first().click();
-  await dp.waitForTimeout(1200);
-  const backAfterUndo = !!(await (await fetch(`${base}/api/jobs/${job.id}`)).json()).id;
+  let backAfterUndo = false;
+  for (let i = 0; i < 30 && !backAfterUndo; i++) {
+    await dp.waitForTimeout(500);
+    backAfterUndo = (await fetch(`${base}/api/jobs/${job.id}`)).ok;
+  }
+  await dp.waitForTimeout(500);
   await actions().click();
   await dp.getByRole("menuitem", { name: "Delete" }).click();
-  await dp.waitForTimeout(800);
-  const goneAfterDelete = (await fetch(`${base}/api/jobs/${job.id}`)).status === 404;
+  let goneAfterDelete = false;
+  for (let i = 0; i < 30 && !goneAfterDelete; i++) {
+    await dp.waitForTimeout(500);
+    goneAfterDelete = (await fetch(`${base}/api/jobs/${job.id}`)).status === 404;
+  }
   await dp.getByRole("button", { name: "Recently deleted" }).click();
   const trashRow = dp.locator('section[aria-label="Recently deleted"] li').filter({ hasText: name }).first();
   await trashRow.getByRole("button", { name: "Restore" }).click();

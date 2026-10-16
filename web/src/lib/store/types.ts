@@ -23,6 +23,8 @@ export interface ProofreadInfo {
   costUsd?: number;
   usage?: Record<string, number | null | undefined>;
   changes: ChangeRecord[];
+  /** In job lists only (the change list itself is left out there). */
+  changeCount?: number;
   formatting: { deviated: boolean; runs: number; paragraphs: number };
   dropped?: { what: string; why: string }[];
   /** Score of the student's original, and of the document with every suggestion accepted. */
@@ -73,8 +75,18 @@ export interface TrashEntry {
   job: Job;
 }
 
-/** Where jobs live. M3: local folder. M4: OneDrive + database. */
+/** One AI run (cost tracker). */
+export interface UsageEntry {
+  at: string;
+  jobId: string;
+  model: string;
+  costUsd: number;
+  usage?: unknown;
+}
+
+/** Where jobs live: a local folder while developing, Karina's OneDrive online (lib/storage). */
 export interface JobStore {
+  /** Summaries (no change lists: see ProofreadInfo.changeCount), newest first. */
   list(): Promise<Job[]>;
   get(id: string): Promise<Job | null>;
   create(fileName: string, data: Uint8Array, source?: Job["source"]): Promise<Job>;
@@ -83,10 +95,14 @@ export interface JobStore {
   remove(id: string): Promise<string | null>;
   listTrash(): Promise<TrashEntry[]>;
   restore(entry: string): Promise<Job>;
+  purge(entry: string): Promise<void>;
+  readSource(id: string): Promise<Uint8Array>;
   readVersion(id: string, n: number): Promise<Uint8Array>;
   addVersion(id: string, data: Uint8Array, v: Omit<Version, "n" | "createdAt">, opts?: { rolling?: boolean }): Promise<Job>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
+  logUsage(entry: UsageEntry): Promise<void>;
+  usage(): Promise<UsageEntry[]>;
   /** Total AI spend recorded since `since` (ISO date), for the balance estimate. */
   spendSince(since: string | null): Promise<number>;
 }

@@ -1,22 +1,12 @@
-import { readFileSync, existsSync } from "node:fs";
-import path from "node:path";
 import type { LearnedExample } from "../learn/proposals";
-import { getLearnStore } from "../learn/store";
+import type { LearnStore } from "../learn/store";
 import type { ChangeRecord } from "../pipeline";
+import type { ConfigStore } from "../rules/config-store";
 import { customAiInstructions } from "../rules/custom";
 import type { RuleContext } from "../rules/types";
 
-function promptsDir(): string {
-  const candidates = [path.join(process.cwd(), "prompts"), path.join(process.cwd(), "web", "prompts")];
-  const found = candidates.find((d) => existsSync(path.join(d, "karina-style-guide.md")));
-  if (!found) throw new Error("prompts/karina-style-guide.md not found");
-  return found;
-}
-
-let cachedSystem: string | null = null;
-
 /** Examples Karina approved from her recent reviews (Review rules → From your reviews), grouped by document type. */
-export function learnedExamples(list: LearnedExample[] = getLearnStore().examplesSync()): string {
+export function learnedExamples(list: LearnedExample[]): string {
   if (!list.length) return "";
   const types = [...new Set(list.map((x) => x.docType))];
   const body = types
@@ -31,19 +21,17 @@ ${body}
 `;
 }
 
-/** Call after the rulebook is edited so the next run uses it. */
-export function resetPromptCache(): void {
-  cachedSystem = null;
+/**
+ * Stable system prompt (cached by the API between calls with the same text): role, Karina's rulebook, examples,
+ * output rules. Read fresh for every run, so an edited rulebook or a new example applies on every server at once.
+ */
+export async function systemPrompt(st: { config: ConfigStore; learn: LearnStore }): Promise<string> {
+  const [guide, examples, state] = await Promise.all([st.config.styleGuide(), st.config.examples(), st.learn.state()]);
+  return buildSystemPrompt(guide, examples, learnedExamples(state.examples));
 }
 
-/** Stable system prompt (cached by the API): role, Karina's rulebook, examples, output rules. */
-export function systemPrompt(): string {
-  if (cachedSystem) return cachedSystem;
-  const dir = promptsDir();
-  const guide = readFileSync(path.join(dir, "karina-style-guide.md"), "utf8");
-  const examples = readFileSync(path.join(dir, "karina-examples.md"), "utf8");
-  const learned = learnedExamples();
-  cachedSystem = `You proofread enrollment documents written by Indonesian students applying to universities in Taiwan, exactly the way Karina Octavia (an education consultant) reviews them in Microsoft Word with Track Changes. Your output becomes Karina's own tracked changes in the student's file, so it must read as if Karina typed it herself: her priorities, her amount of editing, her voice in notes.
+export function buildSystemPrompt(guide: string, examples: string, learned: string): string {
+  return `You proofread enrollment documents written by Indonesian students applying to universities in Taiwan, exactly the way Karina Octavia (an education consultant) reviews them in Microsoft Word with Track Changes. Your output becomes Karina's own tracked changes in the student's file, so it must read as if Karina typed it herself: her priorities, her amount of editing, her voice in notes.
 
 <style_guide>
 ${guide}
@@ -88,7 +76,6 @@ Rules:
 - Never mention AI, bots, assistants or tools in inserted text, except Karina's own habit of asking the student whether their text was AI-generated.
 - Use straight apostrophes in text you add unless the surrounding text uses curly ones.
 </how_to_answer>`;
-  return cachedSystem;
 }
 
 /** The per-document user message. */

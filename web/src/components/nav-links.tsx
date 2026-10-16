@@ -5,13 +5,15 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Documents", short: "Documents" },
+  { href: "/", label: "Documents", short: "Docs" },
   { href: "/rules", label: "Review rules", short: "Rules" },
+  { href: "/costs", label: "AI costs", short: "Costs" },
   { href: "/settings", label: "Settings", short: "Settings" },
 ];
 
 export function NavLinks() {
   const path = usePathname();
+  if (path === "/login" || path === "/setup") return null;
   return (
     <nav className="flex items-center gap-1 text-sm">
       {LINKS.map((l) => {

@@ -72,7 +72,10 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
   async function setStatus(job: Job, status: JobStatus) {
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     if (!res.ok) return toast.error("Could not update the document.");
-    if (status === "done") toastDone(((await res.json()) as { learned?: Learned }).learned, () => router.push("/rules?tab=learned"));
+    if (status === "done") {
+      const body = (await res.json()) as { learned?: Learned; savedTo?: string };
+      toastDone(body.learned, () => router.push("/rules?tab=learned"), body.savedTo);
+    }
     else toast.success("Back in review");
     router.refresh();
   }
@@ -173,7 +176,7 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
         ) : (
           <ul className="divide-y">
             {shown.map((job) => {
-              const changes = job.proofread?.changes.length;
+              const changes = job.proofread?.changeCount ?? job.proofread?.changes.length;
               const score = scoreOf(job);
               return (
                 <li key={job.id} className={cn("group grid grid-cols-[1fr_auto] items-center gap-x-2 pr-2 pl-4 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 sm:gap-x-4 sm:pl-5", COLS)}>

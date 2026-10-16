@@ -1,6 +1,6 @@
 # Karina Proofread Bot — Project Plan
 
-_Last updated: 2026-10-16 (learning loop built locally; M4 still on hold at Karina's request)_
+_Last updated: 2026-10-16 (M4 started: Phase A done; waiting for Karina's account steps)_
 
 ## What we are building
 
@@ -37,8 +37,9 @@ Every rule is checked against Karina's real edits on 6 test documents that the b
 | Degree names | Lower case ("bachelor's degree in chemistry") unless at the start of a sentence after a full stop |
 | Spelling | British spellings are kept ("programme", "behaviour"), because Karina doesn't change them |
 | Review editor | SuperDoc (works directly on the Word file), with "Open in Word for the web" as a fallback |
-| PDF | Microsoft Graph conversion, with browser print as a fallback |
-| Storage / sign-in | Personal OneDrive through Microsoft Graph; Microsoft sign-in limited to Karina |
+| PDF | Microsoft Graph conversion (works on OneDrive Personal), with browser print as a fallback and for "PDF with markup" |
+| Storage / sign-in | Personal OneDrive through Microsoft Graph is the **only** storage online (documents, versions, rules, learning, usage), so nothing sits with another service. Sign-in: Microsoft personal accounts, limited to Karina. The app registration needs a free Azure account, which provides the directory. The app also runs locally without sign-in for development |
+| Deploy | Private GitHub repository → Vercel (Hobby). Before the first push, the whole git history is scanned for student names and keys |
 | Email intake | Google Apps Script; check interval and keyword editable in the app's Settings |
 | Hosting | Vercel Hobby (free, personal use) |
 | Rules | Karina's rules live in `web/prompts/karina-rules.json`, edited on the Review rules page; engine, AI and score all read it |
@@ -60,7 +61,7 @@ Each milestone ends with a review by Karina before the next one starts.
 | M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100**, resizable/collapsible panel, drag-and-drop side-by-side, **PDF input** | ✅ Done (2026-10-16): 43/43 browser checks, waiting for Karina's review |
 | M3++ | UI/UX round: **dark mode** (white or dark paper), documents search/filter/rename/delete+restore, review shortcuts, save status, view menu, tips, app icon | ✅ Done (2026-10-16): 52/52 browser checks, waiting for Karina's review |
 | M3+++ | **Learning loop** (local): every finished document teaches the bot; proposals (new rules, rules to switch off, AI examples) wait for Karina's approval on Review rules → From your reviews | ✅ Done (2026-10-16): 57/57 browser checks, waiting for Karina's review |
-| M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | ⏳ (on hold) |
+| M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | 🔄 Phase A (built and tested without accounts) ✅ 2026-10-16. Next: Karina's steps in [ONLINE_SETUP.md](ONLINE_SETUP.md), then Phase B (OneDrive with her account) and C (deploy) |
 | M5 | Gmail auto-intake (learning loop and PDF input already done locally) | ⏳ |
 
 ### M2 — Claude layer

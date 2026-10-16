@@ -25,6 +25,7 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; dev server must run)
 - `cd web; node scripts/seed.mjs <files> [--ai] [--no-proofread]` — load .docx/.pdf documents into the local app
 - `cd web; npx tsx scripts/pdf-to-docx.ts <file.pdf> --out <dir> [--text]` — check PDF→Word conversion (`lib/pdf/pdf-to-docx.ts`, pdf.js)
+- `cd web; node scripts/make-icons.mjs` — re-render the phone-install icons from `src/app/icon.svg`
 - `cd web; node scripts/shots.mjs <jobId> <outDir> [--dark-only] [--paper dark]` — screenshots of every screen, light/dark, desktop/phone (design review)
 
 ## Theme
@@ -33,6 +34,18 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; node scripts/clear-jobs.mjs [<jobId> ...]` — list jobs, or move the given ones to `web/.data/trash/`. Karina uploads her own documents to the local app too: never delete a job you didn't create in this session.
 - `cd web; npx tsx scripts/score-docs.ts <file|folder>` — score documents (original vs. reviewed) to calibrate the score
 - `cd web; npx tsx scripts/learn.ts <file|folder> [--store <dir>] [--apply <out.json>] [--show]` — learn from Karina's reviewed Word files (skips the hold-out set); `--store` a scratch dir to keep the app's data untouched, `--apply` writes rules with every rule proposal approved (for the before/after accuracy test)
+
+## Storage, sign-in, online (M4)
+- **Two modes:**
+  - **Local:** no `MS_CLIENT_ID`. Files in `web/.data`, rules in `web/prompts`, no sign-in. This is what the tests and e2e use.
+  - **Online:** Microsoft sign-in, and Karina's OneDrive project folder (`Inbox/`, `Done/`, `App data/`). Setup steps in `docs/ONLINE_SETUP.md`.
+- **Getting the stores:** pages and routes get them with `await stores()` (`lib/storage/stores.ts`). The command-line scripts use `localStores()` (`lib/storage/local.ts`). Never read or write `.data` or `prompts` directly: go through `AppFiles` (`lib/storage/files.ts`: local `FsFiles`, `OneDriveFiles` via `lib/onedrive/graph.ts`).
+- **Errors in routes:** call `stores()` outside `try`. Online it redirects to sign-in, and that redirect must not be caught.
+- **Proxy:** `src/proxy.ts` guards pages only. API routes are excluded, so uploads aren't cut at 10 MB, and they check the session through `stores()`.
+- **Sign-in:** `lib/auth/*`. Authority `consumers`, PKCE, encrypted cookie split into chunks, allow-list `ALLOWED_ACCOUNT`.
+- **Tests:** OneDrive is tested against `lib/onedrive/fake-graph.ts`.
+- **Build traces:** `next.config.ts` traces `prompts/*` and the pdf.js worker and fonts, and **excludes `.data` and backups**. After config changes, check that no `.nft.json` lists `.data`.
+- **Hold-out guard:** SHA-256 of the 6 test files in `lib/learn/holdout.ts`, with no names.
 
 ## Web app notes
 - SuperDoc v2 (`@superdoc/react`): document API is async (`activeEditor.doc.*` returns promises); `viewing.trackedChanges` must be `'markup'|'final'|'original'`; telemetry must stay `{ enabled: false }`.

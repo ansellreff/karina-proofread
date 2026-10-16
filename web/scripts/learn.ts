@@ -16,8 +16,9 @@ import { LearnError, learnSummary, recordFromReview } from "../src/lib/learn/lea
 import { redline, type Proposal } from "../src/lib/learn/proposals";
 import { LearnStore } from "../src/lib/learn/store";
 import { DOC_TYPES, withDefaults, type RuleConfig } from "../src/lib/rules/config";
-import { loadRules } from "../src/lib/rules/config-store";
 import { switchOff } from "../src/lib/rules/names";
+import { FsFiles } from "../src/lib/storage/fs-files";
+import { localStores } from "../src/lib/storage/local";
 
 const pct = (a: number, b: number) => `${Math.round((100 * a) / Math.max(1, b))}%`;
 
@@ -50,8 +51,9 @@ async function main() {
     process.exit(1);
   }
   const rulesFile = value("--rules");
-  const rules = rulesFile ? withDefaults(JSON.parse(await readFile(rulesFile, "utf8"))) : await loadRules();
-  const store = new LearnStore(value("--store") ? path.resolve(value("--store")!) : undefined);
+  const local = localStores();
+  const rules = rulesFile ? withDefaults(JSON.parse(await readFile(rulesFile, "utf8"))) : await local.config.loadRules();
+  const store = value("--store") ? new LearnStore(new FsFiles(path.resolve(value("--store")!))) : local.learn;
 
   const files: string[] = [];
   for (const input of inputs) {

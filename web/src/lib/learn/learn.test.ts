@@ -7,6 +7,7 @@ import { learnedExamples } from "../ai/prompt";
 import type { ChangeRecord } from "../pipeline";
 import { withDefaults } from "../rules/config";
 import { switchOff } from "../rules/names";
+import { FsFiles } from "../storage/fs-files";
 import type { DocType } from "../rules/types";
 import { alignParagraphs, wordDiff } from "./diff";
 import { recordFromReview } from "./learn";
@@ -163,7 +164,7 @@ describe("learning from a reviewed Word file", () => {
   it("stores, lists and forgets records", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "learn-"));
     try {
-      const store = new LearnStore(dir);
+      const store = new LearnStore(new FsFiles(dir));
       const rec = record("up-abc", [LONG], [LONG]);
       await store.save(rec);
       expect((await store.list()).map((r) => r.id)).toEqual(["up-abc"]);

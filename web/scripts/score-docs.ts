@@ -8,7 +8,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { DocxPackage } from "../src/lib/docx/package";
 import { wDescendants } from "../src/lib/docx/xml";
-import { loadRules } from "../src/lib/rules/config-store";
+import { localStores } from "../src/lib/storage/local";
 import { buildContext } from "../src/lib/rules/detect";
 import { scoreDocx } from "../src/lib/score/score";
 
@@ -48,7 +48,7 @@ async function main() {
       for (const f of await readdir(p)) if (f.endsWith(".docx") && !f.startsWith("~$")) files.push(path.join(p, f));
     } else files.push(p);
   }
-  const rules = await loadRules();
+  const rules = await localStores().config.loadRules();
   const rows: string[] = [];
   let sumO = 0, sumF = 0;
   for (const f of files) {

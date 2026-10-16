@@ -1,6 +1,6 @@
 import { cleanCopy } from "@/lib/docx/clean";
 import { doneFileName } from "@/lib/naming";
-import { getStore } from "@/lib/store/fs-store";
+import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
  * GET ?source=1: the file exactly as the student sent it (the PDF, for documents converted from PDF).
  */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const store = getStore();
+  const store = (await stores()).jobs;
   const job = await store.get((await ctx.params).id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
   const url = new URL(request.url);
