@@ -4,6 +4,11 @@ import { getStore } from "@/lib/store/fs-store";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: PageProps<"/jobs/[id]">) {
+  const job = await getStore().get((await params).id).catch(() => null);
+  return { title: job ? `${job.studentName ?? "Unnamed student"} – ${job.docType === "Unknown" ? "Document" : job.docType}` : "Document" };
+}
+
 export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
   const { id } = await params;
   const store = getStore();

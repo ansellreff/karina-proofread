@@ -135,7 +135,7 @@ export function RulesEditor({ initialTab }: { initialTab: RuleTab }) {
       </div>
 
       {(dirty || problems.length > 0) && tab !== "ai" && (
-        <div className="sticky bottom-0 z-20 -mx-4 mt-4 border-t bg-card/95 px-4 py-3 shadow-[0_-4px_12px_rgba(30,36,48,0.06)] backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="sticky bottom-0 z-20 -mx-4 mt-4 border-t bg-card/95 px-4 py-3 shadow-[0_-4px_12px_rgb(var(--shadow-color)/0.08)] backdrop-blur sm:-mx-6 sm:px-6">
           {problems.length > 0 && (
             <ul className="mb-2 space-y-0.5 text-sm text-destructive">
               {problems.slice(0, 4).map((e) => (

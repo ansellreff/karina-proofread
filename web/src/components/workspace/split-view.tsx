@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, GripVertical } from "lucide-react";
+import { ArrowLeftRight, GripVertical, Link2, Unlink2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 import type { Mode } from "./doc-editor";
@@ -98,12 +98,15 @@ export function PaneHeader({ which, value, onPick, onSwap, drag }: {
 }
 
 /** Drag the bar to resize the two sides (20–80%). Arrow keys nudge, double-click resets to half and half. */
-export function SplitDivider({ container, ratio, onRatio, onCommit, order }: {
+export function SplitDivider({ container, ratio, onRatio, onCommit, order, locked, onToggleLock }: {
   container: RefObject<HTMLElement | null>;
   ratio: number;
   onRatio: (r: number) => void;
   onCommit: (r: number) => void;
   order: number;
+  /** Scroll lock, shown as a button on the divider (between the two pages it links). */
+  locked?: boolean;
+  onToggleLock?: () => void;
 }) {
   const dragging = useRef(false);
   const clamp = (r: number) => Math.min(0.8, Math.max(0.2, r));
@@ -111,7 +114,7 @@ export function SplitDivider({ container, ratio, onRatio, onCommit, order }: {
     const box = container.current?.getBoundingClientRect();
     return box ? clamp((clientX - box.left) / box.width) : ratio;
   };
-  return (
+  const separator = (
     <div
       role="separator"
       aria-orientation="vertical"
@@ -120,8 +123,7 @@ export function SplitDivider({ container, ratio, onRatio, onCommit, order }: {
       aria-valuemax={80}
       aria-valuenow={Math.round(ratio * 100)}
       tabIndex={0}
-      style={{ order }}
-      className="group relative z-10 w-2 shrink-0 cursor-col-resize touch-none bg-border/60 outline-none hover:bg-primary/30 focus-visible:bg-primary/40"
+      className="group relative h-full w-full cursor-col-resize touch-none bg-border/60 outline-none hover:bg-primary/30 focus-visible:bg-primary/40"
       onPointerDown={(e) => {
         dragging.current = true;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -142,6 +144,26 @@ export function SplitDivider({ container, ratio, onRatio, onCommit, order }: {
       }}
     >
       <span className="absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/40 group-hover:bg-primary" />
+    </div>
+  );
+  return (
+    <div style={{ order }} className="relative z-10 w-2 shrink-0">
+      {separator}
+      {onToggleLock && (
+        <button
+          type="button"
+          onClick={onToggleLock}
+          aria-pressed={locked}
+          aria-label={locked ? "Scroll locked: click to scroll each side on its own" : "Lock scroll: scroll both sides together"}
+          title={locked ? "Scrolling together (L). Click to scroll each side on its own" : "Each side scrolls on its own (L). Click to scroll together"}
+          className={cn(
+            "absolute top-12 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full border shadow-sm transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+            locked ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {locked ? <Link2 className="size-3.5" /> : <Unlink2 className="size-3.5" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -212,7 +234,7 @@ function makeGhost(pane: HTMLElement, rect: DOMRect): HTMLDivElement {
   Object.assign(ghost.style, {
     position: "fixed", left: "0", top: "0", width: `${rect.width}px`, height: `${rect.height}px`, zIndex: "80",
     transformOrigin: "0 0", transform: `translate(${rect.left}px, ${rect.top}px) scale(1)`, pointerEvents: "none",
-    borderRadius: "12px", overflow: "hidden", background: "var(--card)", boxShadow: "0 24px 60px rgba(30,36,48,.30), 0 0 0 1px rgba(43,57,144,.35)",
+    borderRadius: "12px", overflow: "hidden", background: "var(--card)", boxShadow: "0 24px 60px rgb(var(--shadow-color) / .35), 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent)",
     transition: "transform 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms", willChange: "transform",
   });
   const clone = pane.cloneNode(true) as HTMLElement;

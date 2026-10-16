@@ -1,6 +1,6 @@
 # Karina Proofread Bot
 
-Private web app that proofreads student enrollment documents (study plans, autobiographies, CVs, SOPs…) in Karina Octavia's personal review style. Plan and milestones: `C:\Users\reffr\.claude\plans\tingly-meandering-scott.md`.
+Private web app that proofreads student enrollment documents (study plans, autobiographies, CVs, SOPs…) in Karina Octavia's personal review style. Plan and milestones: `docs/PROJECT_PLAN.md`.
 
 ## Tracking (Karina reads these to follow the project)
 - `docs/PROJECT_PLAN.md`: plan, decisions, milestone status. Update when a decision or scope changes.
@@ -25,6 +25,11 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; dev server must run)
 - `cd web; node scripts/seed.mjs <files> [--ai] [--no-proofread]` — load .docx/.pdf documents into the local app
 - `cd web; npx tsx scripts/pdf-to-docx.ts <file.pdf> --out <dir> [--text]` — check PDF→Word conversion (`lib/pdf/pdf-to-docx.ts`, pdf.js)
+- `cd web; node scripts/shots.mjs <jobId> <outDir> [--dark-only] [--paper dark]` — screenshots of every screen, light/dark, desktop/phone (design review)
+
+## Theme
+- Light/dark tokens in `web/src/app/globals.css` (`:root` and `.dark`; every pair checked ≥ 4.5:1). Never hard-code colours in components; use tokens (`--mark-foreground`, `--shadow-color` exist for chips and shadows).
+- SuperDoc follows the theme through its `--sd-*` tokens under `html.dark`; the page stays white via `--sd-layout-page-bg`. Optional dark paper = `html[data-paper="dark"]` (filter invert). The print view forces light.
 - `cd web; node scripts/clear-jobs.mjs [<jobId> ...]` — list jobs, or move the given ones to `web/.data/trash/`. Karina uploads her own documents to the local app too: never delete a job you didn't create in this session.
 - `cd web; npx tsx scripts/score-docs.ts <file|folder>` — score documents (original vs. reviewed) to calibrate the score
 

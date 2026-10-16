@@ -34,10 +34,16 @@ form.append("files", new Blob([await readFile(sample)]), path.basename(sample));
 const up = await (await fetch(`${base}/api/jobs`, { method: "POST", body: form })).json();
 const job = up.created?.[0];
 check("upload .docx", !!job, up.errors?.join("; "));
+/** Remove one of this test's own documents completely (to the trash, then erased), so "Recently deleted" stays clean. */
+async function discard(id) {
+  const res = await fetch(`${base}/api/jobs/${id}`, { method: "DELETE" }).catch(() => null);
+  const trashed = res && (await res.json().catch(() => ({}))).trashed;
+  if (trashed) await fetch(`${base}/api/trash/${encodeURIComponent(trashed)}`, { method: "DELETE" }).catch(() => {});
+}
 // if the run crashes, remove only this test's own document (never anything else in the app)
 const cleanUp = async (e) => {
   console.error(e);
-  if (job) await fetch(`${base}/api/jobs/${job.id}`, { method: "DELETE" }).catch(() => {});
+  if (job) await discard(job.id);
   process.exit(1);
 };
 process.on("uncaughtException", cleanUp);
@@ -269,11 +275,53 @@ await page.getByRole("button", { name: /Side by side/ }).click();
 await page.waitForTimeout(500);
 check("comparing never reloads the review editor (unsaved edits are safe)", (await editorKept()) && (await page.locator('[data-pane="original"]').count()) === 0);
 
+// 4e. keyboard shortcuts (cursor outside the document text) and the "?" list
+await page.locator("aside").getByText(/bot changes still open/).first().click(); // focus out of the document
+const activeKeyNow = () => page.locator("aside li[aria-current]").first().getAttribute("data-change-key").catch(() => null);
+const k0 = await activeKeyNow();
+await page.keyboard.press("j");
+await page.waitForTimeout(800);
+const k1 = await activeKeyNow();
+const openBefore = await openLine();
+await page.keyboard.press("j"); // a change with tracked text (the first item may be the formatting group)
+await page.waitForTimeout(800);
+const openAtJ = await openLine();
+await page.keyboard.press("a");
+const openAfterA = await waitChange(openAtJ);
+await page.keyboard.press("u");
+const openAfterU = await waitChange(openAfterA);
+await page.keyboard.press("?");
+const helpShown = await page.getByRole("dialog", { name: "Keyboard shortcuts" }).isVisible().catch(() => false);
+await page.keyboard.press("Escape");
+check("shortcuts: J moves to a change, A accepts, U undoes, ? lists them", k1 !== k0 && openAfterA !== openAtJ && openAfterU === openAtJ && helpShown, `${k0} -> ${k1}; ${openBefore} / ${openAfterA} / ${openAfterU}; help ${helpShown}`);
+// typing "j" inside the document is text, not a shortcut
+await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+const kBefore = await activeKeyNow();
+await page.keyboard.press("Escape");
+await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+const textBefore = await page.evaluate(() => document.querySelector(".superdoc-page")?.textContent?.length ?? 0);
+await page.keyboard.type("j");
+await page.waitForTimeout(600);
+const textAfter = await page.evaluate(() => document.querySelector(".superdoc-page")?.textContent?.length ?? 0);
+await page.keyboard.press("Backspace");
+check("shortcuts: typing a letter in the document stays text", textAfter === textBefore + 1 && (await activeKeyNow()) === kBefore, `${textBefore} -> ${textAfter}`);
+
+// 4f. rename the student from the review page (used in the exported file names)
+await page.getByRole("button", { name: /Rename the student/ }).or(page.getByTitle(/Rename the student/)).first().click();
+await page.getByRole("textbox", { name: "Student’s name" }).fill("Ereview Tester");
+await page.getByRole("button", { name: "Save name" }).click();
+await page.waitForTimeout(600);
+const renamed = await (await fetch(`${base}/api/jobs/${job.id}`)).json();
+check("rename the student from the review page", renamed.studentName === "Ereview Tester" && (await page.locator("h1").first().textContent())?.includes("Ereview Tester"), renamed.studentName);
+await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: job.studentName }) });
+
 // 5. save as a new version
 await page.getByRole("button", { name: /^Save$/ }).click();
 await page.waitForTimeout(2500);
 const saved = await (await fetch(`${base}/api/jobs/${job.id}`)).json();
 check("save creates a new version", saved.versions.length === 3, saved.versions.map((v) => v.label).join(" | "));
+const saveStatus = await page.getByText(/^Saved (just now|\d+ min ago)$/).first().isVisible().catch(() => false);
+check("save status shows when it was saved", saveStatus);
 
 // 6. inspect the saved file
 const savedFile = new Uint8Array(await (await fetch(`${base}/api/jobs/${job.id}/file?v=${saved.current}`)).arrayBuffer());
@@ -345,6 +393,73 @@ try {
   await fetch(`${base}/api/rules`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules: savedRules.rules }) });
 }
 
+// 7c. documents page: search, delete with Undo, Recently deleted -> Restore (only this test's own document)
+{
+  // give this test's document a unique name first, so search and delete can only ever touch it
+  const name = `E2E Test ${Date.now().toString(36)}`;
+  await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: name }) });
+  const dp = await newPage({ width: 1280, height: 900 });
+  await dp.goto(`${base}/`);
+  await dp.getByRole("searchbox", { name: "Search documents" }).fill(name);
+  await dp.waitForTimeout(300);
+  const rows = dp.locator('section[aria-label="Documents"] li');
+  const found = (await rows.count()) === 1 && (await rows.filter({ hasText: name }).count()) === 1;
+  await dp.getByRole("searchbox", { name: "Search documents" }).fill("zzzz-no-such-document");
+  const empty = await dp.getByText(/Nothing matches/).isVisible();
+  check("documents page: search finds the document and says when nothing matches", found && empty);
+  await dp.getByRole("searchbox", { name: "Search documents" }).fill(name);
+  const actions = () => dp.getByRole("button", { name: `Actions for ${name}`, exact: true });
+  await actions().click();
+  await dp.getByRole("menuitem", { name: "Delete" }).click();
+  await dp.locator("[data-sonner-toast]").getByRole("button", { name: "Undo" }).first().click();
+  await dp.waitForTimeout(1200);
+  const backAfterUndo = !!(await (await fetch(`${base}/api/jobs/${job.id}`)).json()).id;
+  await actions().click();
+  await dp.getByRole("menuitem", { name: "Delete" }).click();
+  await dp.waitForTimeout(800);
+  const goneAfterDelete = (await fetch(`${base}/api/jobs/${job.id}`)).status === 404;
+  await dp.getByRole("button", { name: "Recently deleted" }).click();
+  const trashRow = dp.locator('section[aria-label="Recently deleted"] li').filter({ hasText: name }).first();
+  await trashRow.getByRole("button", { name: "Restore" }).click();
+  await dp.waitForTimeout(1200);
+  const restoredBack = (await fetch(`${base}/api/jobs/${job.id}`)).ok;
+  check("documents page: delete can be undone, and restored from Recently deleted", backAfterUndo && goneAfterDelete && restoredBack, `undo ${backAfterUndo}, deleted ${goneAfterDelete}, restored ${restoredBack}`);
+  await dp.close();
+  await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: job.studentName }) });
+}
+
+// 7d. dark mode: app and editor chrome go dark, the page stays white paper (or inverts on request), printing stays light
+{
+  const tp = await newPage({ width: 1440, height: 900 });
+  await tp.goto(`${base}/jobs/${job.id}`);
+  await tp.waitForFunction(() => !!window.__superdoc, null, { timeout: 60000 });
+  await tp.getByRole("button", { name: /Appearance/ }).click();
+  await tp.getByRole("menuitem", { name: "Dark", exact: true }).click();
+  await tp.waitForTimeout(800);
+  const look = () => tp.evaluate(() => {
+    const page = document.querySelector(".superdoc-page");
+    return {
+      dark: document.documentElement.classList.contains("dark"),
+      body: getComputedStyle(document.body).backgroundColor,
+      paper: page ? getComputedStyle(page).backgroundColor : null,
+      filter: page ? getComputedStyle(page).filter : null,
+      toolbar: getComputedStyle(document.documentElement).getPropertyValue("--sd-ui-toolbar-bg").trim(),
+    };
+  });
+  const d = await look();
+  await tp.screenshot({ path: path.join(out, "08-dark-review.png") });
+  await tp.getByRole("button", { name: /Appearance/ }).click();
+  await tp.getByRole("menuitem", { name: /Dark paper/ }).click();
+  await tp.waitForTimeout(500);
+  const dp2 = await look();
+  check("dark mode: app and editor toolbar dark, page stays white; dark paper inverts the page", d.dark && d.body === "rgb(17, 20, 27)" && d.paper === "rgb(255, 255, 255)" && d.toolbar === "#191d26" && d.filter === "none" && dp2.filter.includes("invert"), JSON.stringify({ ...d, darkPaper: dp2.filter }));
+  await tp.goto(`${base}/jobs/${job.id}/print?v=1&markup=0`);
+  await tp.waitForTimeout(1500);
+  const printLight = await tp.evaluate(() => !document.documentElement.classList.contains("dark"));
+  check("dark mode: the print view stays light", printLight);
+  await tp.close();
+}
+
 // 8. phone layout
 const phone = await newPage({ width: 390, height: 844 });
 await phone.goto(`${base}/`);
@@ -392,7 +507,7 @@ if (pdfSample) {
       check("a reviewed PDF exports as PDF (print view)", await ppv.evaluate(() => window.__printed === true));
       await ppv.close();
     } finally {
-      await fetch(`${base}/api/jobs/${pjob.id}`, { method: "DELETE" });
+      await discard(pjob.id);
     }
   }
 }
@@ -400,7 +515,7 @@ if (pdfSample) {
 check("no requests leave the app (privacy)", !blocked.some((b) => b.startsWith("EXTERNAL")), blocked.filter((b) => b.startsWith("EXTERNAL")).slice(0, 3).join("; "));
 console.log(`\nconsole errors (${consoleErrors.length}):`, consoleErrors.slice(0, 8));
 await browser.close();
-await fetch(`${base}/api/jobs/${job.id}`, { method: "DELETE" });
+await discard(job.id);
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${out}`);
 process.exit(failed ? 1 : 0);

@@ -389,3 +389,70 @@ While cleaning up after a crashed test, I deleted every document in the local ap
   - Escape, or dropping on the same half, leaves everything as it was.
   - It works with a mouse, pen or touch screen.
 - **Test:** the end-to-end test now drags with real mouse input and checks that the picture appears, the target half is shown, and the sides swap. **44/44 checks pass.**
+
+## UI/UX round: dark mode and review-flow polish (2026-10-16)
+
+**Request:** improve the UI and UX, add dark mode and any other improvements I recommend (planned and approved in plan mode).
+
+### Dark mode
+- **Switch:** the sun/moon button in the header offers Light, Dark, or Same as this computer. The same choice is under Settings → Appearance and is remembered.
+- **Colours:** the dark palette is “indigo ink”. Every text colour meets the accessibility standard WCAG AA in both themes; the lowest contrast is 5.2:1 in light and 6.0:1 in dark, against a minimum of 4.5:1.
+- **The Word-like editor** follows the theme: toolbar, menus, comment cards and the area around the pages.
+- **Paper:** the page itself stays white paper by default, exactly as it prints. **Dark paper** is an option (header menu, View menu, or Settings): the page is inverted for night work, with the red/green tracked-change colours and pictures kept true.
+- **Phone:** the reflowed document also sits on white (or dark) paper.
+- **Printing:** the print/PDF view always switches to light, so nothing prints dark.
+
+### Documents page
+- **Tabs and search:** All, Waiting, Ready to review and Done, each with its count; a search by student, file or type; sorting by latest, A–Z or lowest score.
+- **Row menu (⋯):**
+  - **Open**;
+  - **Rename student**: this name is used in the DONE_ file names, so you can use the name the student goes by;
+  - **Mark as done / Reopen**;
+  - **Download Word file**;
+  - **Delete**: with an **Undo** in the message that appears.
+- **Recently deleted** at the bottom: every deleted document can be restored. The app has no “erase forever”.
+- **Fixes:** the column headings now line up with the rows; scores show as a coloured badge; PDF uploads show their PDF name.
+
+### Review page
+- **Rename:** click the student’s name at the top to correct it.
+- **Save status:** “Unsaved changes”, “Saving…”, “Saved 2 min ago” or “Autosaved …”, next to the Save button.
+- **View options (eye button):**
+  - Original full screen;
+  - Side by side;
+  - Lock scroll;
+  - Review panel;
+  - paper colour;
+  - Keyboard shortcuts.
+
+  The scroll lock also sits as a round button on the bar between the two pages.
+- **Keyboard shortcuts** (press **?** for the list). They work when the cursor is not in the document text, so typing is never taken over; Ctrl+S works everywhere.
+
+  | Key | Action |
+  |---|---|
+  | J / K | Next / previous open change |
+  | A / R | Accept / reject it, then go to the next |
+  | U | Undo |
+  | Ctrl+S | Save |
+  | \ | Panel |
+  | O | Original |
+  | S | Side by side |
+  | L | Lock scroll |
+  | Esc | Back to the review |
+
+- **Quick tips** card the first time (dismiss with “Got it”).
+- **Tooltips:** buttons show what they do and their shortcut.
+
+### App polish
+- An app icon (an indigo “K” with a highlighter stroke) in the browser tab, and the same mark in the header.
+- **Tab titles:** “<Student> – <Type> | Karina Proofread”, “Documents”, “Review rules”, “Settings”.
+- The unused Next.js sample images were removed.
+
+### Verified
+- **52/52 end-to-end checks in a real browser.** New ones:
+  - dark mode in the app and editor, with white or dark paper, and the print view staying light;
+  - search, delete then Undo, and delete then Recently deleted then Restore;
+  - J/A/U/? shortcuts, and typing a letter in the document staying text;
+  - renaming from the review page;
+  - the save status.
+- 47 unit tests, lint, type check and the production build pass.
+- **The test now gives its own document a unique name** before it touches the Documents page. In one run it had matched one of your sample documents with the same file name; nothing was lost (your 5 documents are unchanged), but it can no longer happen. Its leftover copies in Recently deleted were erased, so the list is empty.

@@ -66,13 +66,23 @@ export const DEFAULT_SETTINGS: Settings = {
   balanceSetAt: null,
 };
 
+/** A deleted document, kept so it can be restored. */
+export interface TrashEntry {
+  entry: string;
+  deletedAt: string;
+  job: Job;
+}
+
 /** Where jobs live. M3: local folder. M4: OneDrive + database. */
 export interface JobStore {
   list(): Promise<Job[]>;
   get(id: string): Promise<Job | null>;
   create(fileName: string, data: Uint8Array, source?: Job["source"]): Promise<Job>;
   save(job: Job): Promise<void>;
-  remove(id: string): Promise<void>;
+  /** Moves the document to the trash; returns the trash entry (null when it didn't exist). */
+  remove(id: string): Promise<string | null>;
+  listTrash(): Promise<TrashEntry[]>;
+  restore(entry: string): Promise<Job>;
   readVersion(id: string, n: number): Promise<Uint8Array>;
   addVersion(id: string, data: Uint8Array, v: Omit<Version, "n" | "createdAt">, opts?: { rolling?: boolean }): Promise<Job>;
   getSettings(): Promise<Settings>;

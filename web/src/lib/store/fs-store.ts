@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rename, writeFile, appendFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { DocxPackage } from "../docx/package";
 import { pdfToDocx } from "../pdf/pdf-to-docx";
 import { bodyParagraphs } from "../docx/paragraphs";
 import { acceptAllRevisions } from "../docx/accept";
 import { buildContext, detectName } from "../rules/detect";
-import { DEFAULT_SETTINGS, type Job, type JobStore, type Settings, type Version } from "./types";
+import { DEFAULT_SETTINGS, type Job, type JobStore, type Settings, type TrashEntry, type Version } from "./types";
 
 /** Local-folder job store (web/.data, gitignored). Each job: meta.json + v0.docx, v1.docx, ... */
 export class FsJobStore implements JobStore {
@@ -74,13 +74,59 @@ export class FsJobStore implements JobStore {
     await writeFile(path.join(this.dir(job.id), "meta.json"), JSON.stringify(job, null, 1));
   }
 
-  /** Deleting moves the document to .data/trash/ (never erased), so a wrong delete can always be undone by hand. */
-  async remove(id: string): Promise<void> {
+  /** Deleting moves the document to .data/trash/ (never erased), so it can be restored. Returns the trash entry. */
+  async remove(id: string): Promise<string | null> {
     const trash = path.join(this.root, "trash");
     await mkdir(trash, { recursive: true });
-    await rename(this.dir(id), path.join(trash, `${id}_${new Date().toISOString().replace(/[:.]/g, "-")}`)).catch(async (e: NodeJS.ErrnoException) => {
-      if (e.code !== "ENOENT") throw e;
-    });
+    const entry = `${id}_${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    try {
+      await rename(this.dir(id), path.join(trash, entry));
+      return entry;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw e;
+    }
+  }
+
+  /** Recently deleted documents, newest first. */
+  async listTrash(): Promise<TrashEntry[]> {
+    const trash = path.join(this.root, "trash");
+    let entries: string[] = [];
+    try {
+      entries = await readdir(trash);
+    } catch {
+      return [];
+    }
+    const out: TrashEntry[] = [];
+    for (const entry of entries) {
+      const m = /^([a-f0-9-]{36})_(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/.exec(entry);
+      if (!m) continue;
+      try {
+        const job = JSON.parse(await readFile(path.join(trash, entry, "meta.json"), "utf8")) as Job;
+        out.push({ entry, deletedAt: `${m[2]}T${m[3]}:${m[4]}:${m[5]}.${m[6]}Z`, job });
+      } catch {
+        /* not a job folder */
+      }
+    }
+    return out.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+  }
+
+  /** Erase one deleted document for good (test clean-up; the app itself offers no "erase forever"). */
+  async purge(entry: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}_[\dT-]+Z$/.test(entry)) throw new Error("Unknown deleted document.");
+    await rm(path.join(this.root, "trash", entry), { recursive: true, force: true });
+  }
+
+  /** Put a deleted document back. */
+  async restore(entry: string): Promise<Job> {
+    const m = /^([a-f0-9-]{36})_[\dT-]+Z$/.exec(entry);
+    if (!m) throw new Error("Unknown deleted document.");
+    const id = m[1];
+    if (await this.get(id)) throw new Error("This document is already in the list.");
+    await mkdir(path.join(this.root, "jobs"), { recursive: true });
+    await rename(path.join(this.root, "trash", entry), this.dir(id));
+    const job = (await this.get(id))!;
+    return job;
   }
 
   /** The PDF exactly as the student sent it (documents converted from PDF). */

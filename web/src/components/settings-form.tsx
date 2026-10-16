@@ -1,11 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { Segmented } from "@/components/rules/bits";
+import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { Settings } from "@/lib/store/types";
+
+/** Light / dark / system and paper colour: per browser, applied right away. */
+function Appearance() {
+  const { theme, setTheme } = useTheme();
+  const paper = usePaper();
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+  return (
+    <section className="space-y-5 rounded-lg border bg-card p-5">
+      <div>
+        <h2 className="text-lg font-semibold">Appearance</h2>
+        <p className="text-sm text-muted-foreground">Applies right away, on this computer or phone.</p>
+      </div>
+      <Field label="Theme" hint="“System” follows the light/dark setting of this device.">
+        <Segmented
+          ariaLabel="Theme"
+          value={(mounted ? theme : "system") as "light" | "dark" | "system"}
+          onChange={(v) => setTheme(v)}
+          options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }]}
+        />
+      </Field>
+      <Field label="Paper in dark mode" hint="White shows the document as it will print. Dark is easier on the eyes at night.">
+        <Segmented
+          ariaLabel="Paper in dark mode"
+          value={mounted ? paper : "white"}
+          onChange={(v: Paper) => setPaper(v)}
+          options={[{ value: "white", label: "White paper" }, { value: "dark", label: "Dark paper" }]}
+        />
+      </Field>
+    </section>
+  );
+}
 
 interface Info {
   settings: Settings;
@@ -62,6 +96,7 @@ export function SettingsForm() {
 
   return (
     <div className="space-y-8">
+      <Appearance />
       <section className="space-y-5 rounded-lg border bg-card p-5">
         <h2 className="text-lg font-semibold">Proofreading</h2>
         <Field label="Use AI by default" hint="You can still switch it per document.">

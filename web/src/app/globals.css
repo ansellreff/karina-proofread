@@ -36,8 +36,10 @@
   --radius-xl: calc(var(--radius) * 1.4);
 }
 
-/* Palette: batik indigo on porcelain; red/green belong to tracked changes; yellow highlighter marks "beyond usual style". */
-:root {
+/* Palette: batik indigo on porcelain; red/green belong to tracked changes; yellow highlighter marks "beyond usual style".
+   .force-light repeats it for things that must stay light in dark mode (the print view). */
+:root,
+.force-light {
   --background: #f4f5f1;
   --foreground: #1e2430;
   --card: #ffffff;
@@ -59,7 +61,129 @@
   --ins: #1d7a54;
   --del: #b42318;
   --mark: #f5e27a;
+  --mark-foreground: #5c4a00;
+  --shadow-color: 30 36 48;
   --radius: 0.5rem;
+  color-scheme: light;
+}
+
+/* Dark: "indigo ink". Same roles as above; text contrast checked to WCAG AA. */
+.dark {
+  --background: #11141b;
+  --foreground: #e7e9ef;
+  --card: #191d26;
+  --card-foreground: #e7e9ef;
+  --popover: #1d222c;
+  --popover-foreground: #e7e9ef;
+  --primary: #9aa6f5;
+  --primary-foreground: #10131a;
+  --secondary: #252b3b;
+  --secondary-foreground: #c9cffa;
+  --muted: #20252f;
+  --muted-foreground: #9aa3b2;
+  --accent: #252b3b;
+  --accent-foreground: #c9cffa;
+  --destructive: #ff7b72;
+  --border: #2b3141;
+  --input: #363d50;
+  --ring: #9aa6f5;
+  --ins: #4cc38a;
+  --del: #ff7b72;
+  --mark: #b8962a;
+  --mark-foreground: #f2dc8c;
+  --shadow-color: 0 0 0;
+  color-scheme: dark;
+}
+
+/* The Word-like editor (SuperDoc) follows the theme: toolbar, menus, comment cards and the canvas around pages.
+   Its defaults live on :root, so html.dark (more specific) wins. */
+html.dark {
+  --sd-ui-bg: #191d26;
+  --sd-surface-card: #191d26;
+  --sd-surface-canvas: #11141b;
+  --sd-surface-hover: #2a3040;
+  --sd-surface-muted: #20252f;
+  --sd-surface-selected: #2c3560;
+  --sd-ui-text: #e7e9ef;
+  --sd-text-primary: #e7e9ef;
+  --sd-text-secondary: #c3c8d3;
+  --sd-ui-text-muted: #9aa3b2;
+  --sd-ui-text-disabled: #6b7385;
+  --sd-ui-border: #363d50;
+  --sd-border-default: #363d50;
+  --sd-ui-hover-bg: #2a3040;
+  --sd-ui-active-bg: #34405f;
+  --sd-ui-disabled-bg: #20252f;
+  --sd-ui-toolbar-bg: #191d26;
+  --sd-ui-menu-header-bg: #20252f;
+  --sd-ui-menu-text-muted: #9aa3b2;
+  --sd-ui-tools-item-bg: rgba(60, 66, 84, 0.6);
+  --sd-ui-tooltip-bg: #e7e9ef;
+  --sd-ui-tooltip-text: #11141b;
+  --sd-ui-action: #9aa6f5;
+  --sd-ui-action-hover: #b5befa;
+  --sd-ui-action-text: #10131a;
+  --sd-ui-comments-bg: #191d26;
+  --sd-ui-comments-card-bg: #1d222c;
+  --sd-ui-comments-card-hover-bg: #232937;
+  --sd-ui-comments-card-active-bg: #262d3d;
+  --sd-ui-comments-card-active-border: #9aa6f5;
+  --sd-ui-comments-card-resolved-bg: #1a1e27;
+  --sd-ui-comments-border: #2b3141;
+  --sd-ui-comments-separator: #2b3141;
+  --sd-ui-comments-body-text: #d5d9e2;
+  --sd-ui-comments-author-text: #e7e9ef;
+  --sd-ui-comments-timestamp-text: #9aa3b2;
+  --sd-ui-comments-input-bg: #11141b;
+  --sd-ui-comments-input-border: #363d50;
+  --sd-ui-comments-dropdown-bg: #1d222c;
+  --sd-ui-comments-dropdown-border: #363d50;
+  --sd-ui-comments-option-text: #e7e9ef;
+  --sd-ui-comments-option-hover-bg: #2a3040;
+  /* the page itself stays white paper by default: that is what the student gets */
+  --sd-surface-page: #ffffff;
+  --sd-layout-page-bg: #ffffff;
+  --sd-layout-page-color: #000000;
+  --sd-layout-page-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* Phone (reflowed web layout): the text sits on a transparent surface; give it white paper in dark mode too. */
+html.dark .superdoc--web-layout .superdoc-web-flow {
+  background: var(--sd-layout-page-bg, #fff);
+  color: var(--sd-layout-page-color, #000);
+  min-height: 100%;
+}
+
+/* Optional dark paper: invert the page (hue-rotated so red stays red, green stays green); pictures keep their colours. */
+html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* The print view always prints on white, whatever the screen theme. */
+.force-light {
+  color-scheme: light;
+  --sd-ui-bg: #ffffff;
+  --sd-surface-card: #ffffff;
+  --sd-surface-canvas: #f4f5f1;
+  --sd-surface-page: #ffffff;
+  --sd-layout-page-bg: #ffffff;
+  --sd-layout-page-color: #000000;
+  --sd-layout-page-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+  --sd-ui-text: #47484a;
+  --sd-text-primary: #47484a;
+  background: var(--background);
+  color: var(--foreground);
+}
+@media print {
+  html.dark {
+    --sd-surface-page: #ffffff;
+  }
+  html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) {
+    filter: none;
+  }
 }
 
 @layer base {

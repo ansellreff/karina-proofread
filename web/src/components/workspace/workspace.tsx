@@ -1,13 +1,28 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, FileCheck2, FileText, Link2, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Save, ScanText, Sparkles, Unlink2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, Save, ScanText, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { RenameDialog } from "@/components/documents-list";
+import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
+import { Tip } from "@/components/tip";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -19,6 +34,8 @@ import { DropZones, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePref
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
+import { ShortcutsDialog } from "./shortcuts-dialog";
+import { useShortcuts } from "./use-shortcuts";
 import {
   activateTrackedAt,
   clearActiveTracked,
@@ -45,6 +62,10 @@ const DocEditor = dynamic(() => import("./doc-editor"), {
   loading: () => <EditorPlaceholder text="Opening the document…" />,
 });
 
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border bg-muted px-1 font-sans text-[11px] text-foreground">{children}</kbd>;
+}
+
 function PaneLabel({ children }: { children: React.ReactNode }) {
   return <p className="shrink-0 truncate border-b bg-card px-3 py-1.5 text-xs text-muted-foreground">{children}</p>;
 }
@@ -64,6 +85,23 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
 ];
 
 const AUTOSAVE_MS = 90_000;
+
+/** The current time, refreshed every `ms` (for "saved 2 min ago"). */
+function useNow(ms: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+function ago(iso: string, now: number) {
+  const mins = Math.floor((now - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  return `at ${new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
 
 /** One accept/reject made from the panel: how many editor history steps it took and which cards it resolved. */
 interface Decision {
@@ -88,6 +126,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const [mode, setMode] = useState<Mode>(initialJob.versions.length > 1 ? "suggesting" : "viewing");
   const [tracked, setTracked] = useState<TrackedItem[]>([]);
   const [comments, setComments] = useState(0);
+  /** Last save in this session (null: show the time of the version on screen). */
+  const [lastSave, setLastSave] = useState<{ at: string; auto: boolean } | null>(null);
+  const now = useNow(30_000);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [tipsSeen, setTipsSeen] = usePreference("tips-seen", false);
+  const paper = usePaper();
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [proofreadOpen, setProofreadOpen] = useState(false);
@@ -99,6 +144,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     setEditorError(null);
     setLoadedState(n);
     setShown(n);
+    setLastSave(null);
   }, []);
   const sd = useRef<unknown>(null);
   /** Tracked change highlighted in the editor (clicked in the document or jumped to from the panel). */
@@ -200,6 +246,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         setJob(updated);
         setShown(updated.current); // the editor already shows this content; no reload
         setDirty(false);
+        setLastSave({ at: new Date().toISOString(), auto: !!opts.autosave });
         if (!opts.autosave) toast.success("Saved as a new version");
         return updated;
       } catch (e) {
@@ -330,9 +377,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     toast("That passage has changed since, so it can’t be found any more.");
   }
 
-  /** Phone: step through all changes without opening the panel. */
-  const stepAll = (dir: 1 | -1) => {
-    const stops = panelChanges.filter(canLocate);
+  /** Phone arrows (all changes) and J/K (only the ones still open): step without opening the panel. */
+  const stepAll = (dir: 1 | -1, openOnly = false) => {
+    const stops = panelChanges.filter((c) => canLocate(c) && (!openOnly || c.live.length > 0));
     if (!stops.length) return;
     const at = stops.findIndex((c) => c.key === activeKey);
     const next = at < 0 ? (dir === 1 ? 0 : stops.length - 1) : (at + dir + stops.length) % stops.length;
@@ -411,6 +458,10 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     setView("review");
     setMode(m);
     sdSetMode(sd.current, m);
+  };
+  const showOriginalFull = () => {
+    setSplit(false);
+    setView("original");
   };
 
   async function exportAs(kind: "tracked" | "clean" | "pdf" | "pdf-markup") {
@@ -532,6 +583,52 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     </Tabs>
   );
 
+  const shownVersion = job.versions.find((v) => v.n === shown);
+  const activeChange = panelChanges.find((c) => c.key === activeKey);
+
+  // ---- keyboard shortcuts (letters only when the cursor is not in the document text)
+  useShortcuts((action) => {
+    switch (action) {
+      case "next":
+        return stepAll(1, true);
+      case "prev":
+        return stepAll(-1, true);
+      case "accept":
+      case "reject": {
+        if (!activeChange?.live.length) {
+          toast("Highlight an open change first: press J, or click one in What changed.");
+          return;
+        }
+        const label = action === "accept" ? "Change accepted" : activeChange.before ? "Change rejected, original text restored" : "Change rejected";
+        void apply(action, [activeChange], label).then(() => stepAll(1, true));
+        return;
+      }
+      case "undo":
+        return void undoDecision();
+      case "save":
+        if (dirty && !saving) void save({ label: "Your edits" });
+        return;
+      case "togglePanel":
+        return setPanelOpen(!panelOpen);
+      case "toggleOriginal":
+        return view === "original" ? setView("review") : showOriginalFull();
+      case "toggleSplit":
+        if (!phone) {
+          setView("review");
+          setSplit(!split);
+        }
+        return;
+      case "toggleLock":
+        if (sideBySide) setScrollLock(!scrollLock);
+        return;
+      case "help":
+        return setShortcutsOpen(true);
+      case "escape":
+        if (view === "original") setView("review");
+        return;
+    }
+  });
+
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
       {/* top bar */}
@@ -540,7 +637,17 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           <ArrowLeft className="size-4" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-serif text-[1.05rem] leading-tight font-semibold">{job.studentName ?? "Unnamed student"}</h1>
+          <h1 className="truncate font-serif text-[1.05rem] leading-tight font-semibold">
+            <button
+              type="button"
+              onClick={() => setRenameOpen(true)}
+              title="Rename the student (used in the exported file names)"
+              className="group/name inline-flex max-w-full items-center gap-1.5 rounded-sm text-left hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <span className="truncate">{job.studentName ?? "Unnamed student"}</span>
+              <Pencil className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover/name:opacity-70 group-focus-visible/name:opacity-70" />
+            </button>
+          </h1>
           <p className="truncate text-xs text-muted-foreground">
             {job.docType === "Unknown" ? "Document" : job.docType}, {job.versions.find((v) => v.n === shown)?.label.toLowerCase()}
           </p>
@@ -589,11 +696,8 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           <button
             role="radio"
             aria-checked={view === "original"}
-            title="The student’s file exactly as uploaded: no suggestions, no edits"
-            onClick={() => {
-              setSplit(false);
-              setView("original");
-            }}
+            title="The student’s file exactly as uploaded: no suggestions, no edits (O)"
+            onClick={showOriginalFull}
             className={cn("h-7 flex-1 rounded px-2 text-xs transition-colors sm:flex-none sm:px-2.5", view === "original" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
           >
             Original
@@ -601,40 +705,77 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         </div>
 
         <div className="hidden items-center gap-1 md:flex">
-          <Button
-            size="sm"
-            variant={sideBySide ? "secondary" : "outline"}
-            aria-pressed={sideBySide}
-            onClick={() => {
-              setView("review");
-              setSplit(!split);
-            }}
-            title={sideBySide ? "Back to one page" : "Show the original next to your review"}
-          >
-            <Columns2 /> <span className="hidden xl:inline">Side by side</span>
-          </Button>
-          {sideBySide && (
+          <Tip label={sideBySide ? "Back to one page" : "Show the original next to your review"} keys="S">
             <Button
               size="sm"
-              variant={scrollLock ? "secondary" : "outline"}
-              aria-pressed={scrollLock}
-              onClick={() => setScrollLock(!scrollLock)}
-              title={scrollLock ? "Scrolling together. Click to scroll each side on its own" : "Each side scrolls on its own. Click to scroll together"}
+              variant={sideBySide ? "secondary" : "outline"}
+              aria-pressed={sideBySide}
+              onClick={() => {
+                setView("review");
+                setSplit(!split);
+              }}
             >
-              {scrollLock ? <Link2 /> : <Unlink2 />} <span className="hidden xl:inline">{scrollLock ? "Scroll locked" : "Lock scroll"}</span>
+              <Columns2 /> <span className="hidden xl:inline">Side by side</span>
             </Button>
-          )}
+          </Tip>
+          <DropdownMenu>
+            <Tip label="View options">
+              <DropdownMenuTrigger render={<Button size="icon-sm" variant="outline" aria-label="View options" />}>
+                <Eye />
+              </DropdownMenuTrigger>
+            </Tip>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>View</DropdownMenuLabel>
+                <DropdownMenuCheckboxItem checked={view === "original"} onCheckedChange={(c) => (c ? showOriginalFull() : setView("review"))}>
+                  Original, full screen <DropdownMenuShortcut>O</DropdownMenuShortcut>
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={sideBySide} onCheckedChange={(c) => { setView("review"); setSplit(c); }}>
+                  Side by side <DropdownMenuShortcut>S</DropdownMenuShortcut>
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={sideBySide && scrollLock} disabled={!sideBySide} onCheckedChange={(c) => setScrollLock(c)}>
+                  Lock scroll (side by side) <DropdownMenuShortcut>L</DropdownMenuShortcut>
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={panelOpen} onCheckedChange={(c) => setPanelOpen(c)} className="hidden lg:flex">
+                  Review panel <DropdownMenuShortcut>\</DropdownMenuShortcut>
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Paper in dark mode</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={paper} onValueChange={(v) => setPaper(v as Paper)}>
+                  <DropdownMenuRadioItem value="white">White (as printed)</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">Dark (easier at night)</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShortcutsOpen(true)}>
+                <Keyboard /> Keyboard shortcuts <DropdownMenuShortcut>?</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <Button size="sm" variant="outline" onClick={() => save({ label: "Your edits" })} disabled={!dirty || saving} title={dirty ? "Save your edits as a new version" : "No unsaved edits"}>
-          {saving ? <Loader2 className="animate-spin" /> : <Save />}
-          <span className="hidden sm:inline">{saving ? "Saving" : dirty ? "Save" : "Saved"}</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="hidden text-xs whitespace-nowrap text-muted-foreground lg:inline" aria-live="polite">
+            {saving ? "Saving…" : dirty ? (
+              <span className="inline-flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-[var(--mark)]" /> Unsaved changes</span>
+            ) : lastSave ? `${lastSave.auto ? "Autosaved" : "Saved"} ${ago(lastSave.at, now)}` : shownVersion ? `Saved ${ago(shownVersion.createdAt, now)}` : null}
+          </span>
+          <Tip label={dirty ? "Save your edits as a new version" : "No unsaved edits"} keys="Ctrl S">
+            <Button size="sm" variant="outline" onClick={() => save({ label: "Your edits" })} disabled={!dirty || saving}>
+              {saving ? <Loader2 className="animate-spin" /> : <Save />}
+              <span className="hidden sm:inline">{saving ? "Saving" : dirty ? "Save" : "Saved"}</span>
+            </Button>
+          </Tip>
+        </div>
         {hasApiKey && hasBotVersion && mode !== "viewing" && (
-          <Button size="sm" variant="outline" onClick={recheckSelection} disabled={rechecking} title="Select text in the document, then ask the AI to look at just that passage again">
-            {rechecking ? <Loader2 className="animate-spin" /> : <ScanText />}
-            <span className="hidden xl:inline">{rechecking ? "Re-checking" : "Re-check selection"}</span>
-          </Button>
+          <Tip label="Select text in the document, then ask the AI to look at just that passage again">
+            <Button size="sm" variant="outline" onClick={recheckSelection} disabled={rechecking}>
+              {rechecking ? <Loader2 className="animate-spin" /> : <ScanText />}
+              <span className="hidden xl:inline">{rechecking ? "Re-checking" : "Re-check selection"}</span>
+            </Button>
+          </Tip>
         )}
         <Button size="sm" variant={hasBotVersion ? "outline" : "default"} onClick={() => setProofreadOpen(true)}>
           <Sparkles /> <span className="hidden sm:inline">{hasBotVersion ? "Proofread again" : "Proofread"}</span>
@@ -698,7 +839,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           {sideBySide && <SplitDivider container={splitBox} ratio={ratio} onRatio={setLiveRatio} onCommit={(r) => {
             setLiveRatio(null);
             saveRatio(r);
-          }} order={1} />}
+          }} order={1} locked={scrollLock} onToggleLock={() => setScrollLock(!scrollLock)} />}
           <div
             ref={reviewPane}
             data-pane="review"
@@ -748,6 +889,24 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           </div>
           </div>
           {sideBySide && paneDrag && <DropZones drag={paneDrag} />}
+          {!tipsSeen && !phone && file && (
+            <div role="note" className="no-print absolute bottom-4 left-4 z-20 hidden w-80 rounded-lg border bg-popover p-4 text-sm text-popover-foreground shadow-lg md:block">
+              <p className="mb-1.5 font-medium">Quick tips</p>
+              <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                <li>Click a change on the right to jump to it; <Kbd>J</Kbd> / <Kbd>K</Kbd> step through them.</li>
+                <li><Kbd>A</Kbd> accepts, <Kbd>R</Kbd> rejects, <Kbd>U</Kbd> undoes, when the cursor isn’t in the text.</li>
+                <li>Side by side: drag a page by its title bar to swap the sides.</li>
+              </ul>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <button type="button" onClick={() => setShortcutsOpen(true)} className="text-xs text-primary hover:underline">
+                  All shortcuts (?)
+                </button>
+                <Button size="sm" variant="secondary" onClick={() => setTipsSeen(true)}>
+                  Got it
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         {panelOpen ? (
           <aside className="relative hidden shrink-0 flex-col border-l bg-card lg:flex" style={{ width: panelWidth, maxWidth: "55vw", minWidth: 300 }}>
@@ -799,6 +958,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           {panel}
         </SheetContent>
       </Sheet>
+
+      <RenameDialog job={renameOpen ? job : null} onClose={() => setRenameOpen(false)} onSaved={(name) => setJob((j) => ({ ...j, studentName: name }))} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       <ProofreadDialog
         job={job}

@@ -17,6 +17,24 @@ export function PrintView({ jobId, version, fileName, title, markup }: { jobId: 
       .then((b) => setFile(new File([b], fileName)));
   }, [jobId, version, fileName, title]);
 
+  // Printing is always on white: switch this tab to light mode while it is open (restored when leaving).
+  useEffect(() => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains("dark");
+    const keepLight = () => {
+      if (html.classList.contains("dark")) html.classList.remove("dark");
+    };
+    keepLight();
+    html.style.colorScheme = "light";
+    const watch = new MutationObserver(keepLight);
+    watch.observe(html, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      watch.disconnect();
+      html.style.colorScheme = "";
+      if (wasDark) html.classList.add("dark");
+    };
+  }, []);
+
   useEffect(() => {
     if (!ready) return;
     const t = setTimeout(() => window.print(), 800);
@@ -24,7 +42,7 @@ export function PrintView({ jobId, version, fileName, title, markup }: { jobId: 
   }, [ready]);
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col print:h-auto">
+    <div className="force-light flex h-[calc(100dvh-3.5rem)] flex-col print:h-auto">
       <div className="no-print flex items-center gap-3 border-b bg-card px-4 py-2 text-sm">
         <p className="flex-1 text-muted-foreground">
           {ready ? "In the print dialog, choose “Save as PDF”." : "Preparing the document…"} {markup ? "With tracked changes shown." : "Clean, with all changes applied."}

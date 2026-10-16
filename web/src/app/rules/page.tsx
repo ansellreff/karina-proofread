@@ -2,6 +2,7 @@ import { RulesEditor } from "@/components/rules/rules-editor";
 import { RULE_TABS, type RuleTab } from "@/components/rules/tabs";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Review rules" };
 
 export default async function RulesPage(props: PageProps<"/rules">) {
   const { tab } = await props.searchParams;
