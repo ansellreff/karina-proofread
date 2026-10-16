@@ -37,6 +37,7 @@ yarn-error.log*
 # local job store (student documents) and rulebook backups
 /.data/
 /prompts/*.backup.md
+/prompts/*.backup.json
 
 # vercel
 .vercel

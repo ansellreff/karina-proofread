@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_RULES, formatReminder, validateRules, withDefaults, type CustomRule, type RuleConfig } from "./config";
 import { detectDocType } from "./detect";
+import { endNote } from "./endnote";
 import { headerBlock } from "./header";
-import { INLINE_RULES } from "./inline";
+import { inlineEdits } from "./inline";
 import type { DocType, ParaInfo, RuleContext } from "./types";
 import { countSentences, countWords } from "./text";
 
-function ctx(texts: string[], docType: DocType = "Study Plan"): RuleContext {
+function ctx(texts: string[], docType: DocType = "Study Plan", config?: RuleConfig): RuleContext {
   const paras: ParaInfo[] = texts.map((text, index) => ({
     index,
     text,
@@ -15,12 +17,12 @@ function ctx(texts: string[], docType: DocType = "Study Plan"): RuleContext {
     isList: false,
     isShort: countWords(text) > 0 && countWords(text) < 15 && countSentences(text) <= 1,
   }));
-  return { fileName: "x.docx", docType, paras, fullText: texts.join("\n") };
+  return { fileName: "x.docx", docType, paras, fullText: texts.join("\n"), config };
 }
 
-const apply = (text: string, docType?: DocType) => {
-  const c = ctx([text], docType);
-  const edits = INLINE_RULES.flatMap((r) => r(c)).sort((a, b) => b.start - a.start);
+const apply = (text: string, docType?: DocType, config?: RuleConfig) => {
+  const c = ctx([text], docType, config);
+  const edits = inlineEdits(c).sort((a, b) => b.start - a.start);
   let out = text;
   for (const e of edits) out = out.slice(0, e.start) + e.text + out.slice(e.end);
   return out;
@@ -66,6 +68,63 @@ describe("Karina inline rules", () => {
   it("adds (put the year) to resume lines with a duration but no year", () => {
     expect(apply("Digital Marketing Intern | Real Estate | 6 Months", "CV/Resume")).toBe("Digital Marketing Intern | Real Estate | 6 Months (put the year)");
     expect(apply("Retail staff | Shop | 2024 – 1 year", "CV/Resume")).toBe("Retail staff | Shop | 2024 – 1 year");
+  });
+});
+
+const withRule = (r: Partial<CustomRule>): RuleConfig => {
+  const c = withDefaults(null);
+  c.custom = [{ ...c.custom[0], id: "t", enabled: true, docTypes: [], find: "", match: "words", caseSensitive: false, occurrences: "all", condition: "always", words: 0, label: "test", action: "replace", text: "", ...r }];
+  return c;
+};
+const BODY = "I have studied business for four years and I want to continue my studies in a strong program with good teachers.";
+
+describe("rules from the Review rules page", () => {
+  it("replace rule keeps a sentence-initial capital", () => {
+    const c = withRule({ action: "replace", find: "as long as", text: "if" });
+    expect(apply("As long as I work hard, I can do it as long as I try.", "Study Plan", c)).toBe("If I work hard, I can do it if I try.");
+  });
+
+  it("whole-word matching does not fire inside other words", () => {
+    const c = withRule({ action: "replace", find: "art", text: "arts" });
+    expect(apply("I like art and the start of the party.", "Study Plan", c)).toBe("I like arts and the start of the party.");
+  });
+
+  it("note rule adds the note after the first match only when asked", () => {
+    const c = withRule({ action: "note", find: "scholarship", text: "which scholarship?", occurrences: "first" });
+    expect(apply("I want a scholarship. The scholarship helps.", "Study Plan", c)).toBe("I want a scholarship (which scholarship?). The scholarship helps.");
+  });
+
+  it("respects the document types a rule is limited to", () => {
+    const c = withRule({ action: "replace", find: "hello", text: "hi", docTypes: ["CV/Resume"] });
+    expect(apply("hello there", "Study Plan", c)).toBe("hello there");
+    expect(apply("hello there", "CV/Resume", c)).toBe("hi there");
+  });
+
+  it("end-note rule fires only when its condition holds", () => {
+    const c = withRule({ action: "end-note", condition: "missing", find: "scholarship", text: "Do you plan to apply for a scholarship?" });
+    const lines = (texts: string[]) => endNote(ctx(texts, "Study Plan", c), { formatDeviated: false, tables: 0 }).flatMap((i) => i.paragraphs.map((p) => p.text));
+    expect(lines([BODY])).toContain("Do you plan to apply for a scholarship?");
+    expect(lines([BODY + " I hope to get a scholarship."])).not.toContain("Do you plan to apply for a scholarship?");
+  });
+
+  it("switching a built-in rule off stops it", () => {
+    const c = withDefaults(null);
+    c.builtIn.spaceBeforeColon.enabled = false;
+    expect(apply("Undergraduate Thesis : my research.", "Study Plan", c)).toBe("Undergraduate Thesis : my research.");
+  });
+
+  it("the formatting reminder follows the standard", () => {
+    expect(formatReminder(DEFAULT_RULES.format)).toEqual([
+      "ALWAYS REMEMBER BASIC WRITING FORMAT", "Font: Times New Roman", "Font Size: 12 pt (Title can be either 14pt or 16pt)",
+      "Line Spacing: 1.5", "Alignment: Justified", "Margins: 1 inch (2.54 cm) on all sides", "Page Number: Bottom center or bottom right",
+    ]);
+  });
+
+  it("refuses rules that would break or fire everywhere", () => {
+    expect(validateRules(DEFAULT_RULES)).toEqual([]);
+    expect(validateRules(withRule({ action: "replace", find: "(unclosed", match: "pattern", text: "x" })).join()).toMatch(/not valid/);
+    expect(validateRules(withRule({ action: "replace", find: "a*", match: "pattern", text: "x" })).join()).toMatch(/empty text/);
+    expect(validateRules(withRule({ action: "note", find: "x", text: " " })).join()).toMatch(/note is empty/);
   });
 });
 

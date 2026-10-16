@@ -10,6 +10,8 @@ import { Reviser, type Identity } from "./docx/revise";
 import { StyleResolver } from "./docx/styles";
 import { wDescendants, type Document } from "./docx/xml";
 import { KARINA } from "./identity";
+import type { RuleConfig } from "./rules/config";
+import { loadRules } from "./rules/config-store";
 import { buildContext } from "./rules/detect";
 import { planFormatting, type FormatPlan } from "./rules/format";
 import { grammarEdits } from "./rules/grammar";
@@ -29,9 +31,10 @@ export interface ProofreadOptions {
   docType?: DocType;
   identity?: Identity;
   now?: Date;
-  /** Include Harper (offline grammar checker) suggestions, limited to the kinds that match Karina. Default true. */
+  /** Include Harper (offline grammar checker) suggestions, limited to the kinds set on the Review rules page. Default true. */
   grammar?: boolean;
-  grammarKinds?: Set<string>;
+  /** Karina's review rules. Default: the saved rules (web/prompts/karina-rules.json). */
+  rules?: RuleConfig;
   /** Claude layer. Omit or false for the rules engine only. */
   ai?: AiOptions | false;
   /** Progress callback for the UI. */
@@ -88,9 +91,9 @@ async function prepare(input: Uint8Array | ArrayBuffer, opts: ProofreadOptions):
   const acceptedExisting = acceptAllRevisions(doc);
   const styles = new StyleResolver(await pkg.xml("word/styles.xml"));
   const paras = bodyParagraphs(doc);
-  const ctx = buildContext(opts.fileName, paras, opts.docType);
+  const ctx = buildContext(opts.fileName, paras, opts.docType, opts.rules ?? (await loadRules()));
   const format = planFormatting(ctx, paras, styles);
-  const extra: TextEdit[] = opts.grammar === false ? [] : await grammarEdits(ctx, opts.grammarKinds);
+  const extra: TextEdit[] = opts.grammar === false ? [] : await grammarEdits(ctx);
   const rules = runRules(ctx, { formatDeviated: format.deviated, tables: wDescendants(doc, "tbl").length }, extra);
   return { pkg, doc, paras, ctx, format, rules, acceptedExisting };
 }
@@ -98,7 +101,7 @@ async function prepare(input: Uint8Array | ArrayBuffer, opts: ProofreadOptions):
 function ruleChangeRecords(p: Prepared): ChangeRecord[] {
   const recs: ChangeRecord[] = p.rules.edits.map((e) => ({
     rule: e.rule, kind: e.kind, paragraph: e.para, start: e.start, end: e.end,
-    before: p.paras[e.para].text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle,
+    before: p.paras[e.para].text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: e.reason,
   }));
   for (const ins of p.rules.inserts) {
     const at = ins.position === "before" ? 0 : p.paras[ins.para].text.length;
@@ -215,7 +218,7 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
       const revisionIds = reviser.capture(() => reviser.replace(para.el, e.start, e.end, e.text));
       changes.push({
         rule: e.rule, kind: e.kind, paragraph: index, start: e.start, end: e.end,
-        before: para.text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: reasons.get(editKey(e)), revisionIds,
+        before: para.text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: reasons.get(editKey(e)) ?? e.reason, revisionIds,
       });
     }
   }

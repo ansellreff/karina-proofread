@@ -1,4 +1,5 @@
 import type { NewParagraph } from "../docx/revise";
+import { DEFAULT_RULES, type RuleConfig } from "./config";
 
 export type DocType =
   | "Study Plan"
@@ -30,7 +31,11 @@ export interface RuleContext {
   docType: DocType;
   paras: ParaInfo[];
   fullText: string;
+  /** Karina's review rules (the Review rules page). Defaults when omitted. */
+  config?: RuleConfig;
 }
+
+export const rulesOf = (ctx: RuleContext): RuleConfig => ctx.config ?? DEFAULT_RULES;
 
 /** A text change inside one paragraph, in that paragraph's original character offsets. */
 export interface TextEdit {
@@ -43,6 +48,8 @@ export interface TextEdit {
   kind: "fix" | "note";
   /** Correct, but beyond Karina's usual habits. Flagged privately in the app, never in the document. */
   beyondStyle?: boolean;
+  /** Private explanation for the review panel. Never written into the document. */
+  reason?: string;
 }
 
 export interface ParagraphInsert {

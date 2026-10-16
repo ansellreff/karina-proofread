@@ -1,6 +1,5 @@
-import { DOC_TITLES } from "./data";
 import { detectName, detectProgram, detectUniversity, headerZone } from "./detect";
-import { NARRATIVE, type ParagraphInsert, type RuleContext } from "./types";
+import { NARRATIVE, rulesOf, type ParagraphInsert, type RuleContext } from "./types";
 
 const TITLE_RE = /study plan|autobiograph|personal statement|statement of purpose|essay|research plan|motivation letter/i;
 const NAME_RE = /\b(name|applicant)\b/i;
@@ -13,7 +12,8 @@ const looksLikeName = (t: string) => /^\s*[A-Z][\p{L}'â€™\-]+(?:\s+[A-Z][\p{L}'â
  * Missing lines are added; unknown values are left as prompts for the student ("????").
  */
 export function headerBlock(ctx: RuleContext): ParagraphInsert[] {
-  if (!NARRATIVE.includes(ctx.docType)) return [];
+  const cfg = rulesOf(ctx).builtIn.headerBlock;
+  if (!cfg.enabled || !NARRATIVE.includes(ctx.docType)) return [];
   const header = headerZone(ctx);
   const first = ctx.paras.find((p) => p.text.trim());
   if (!first) return [];
@@ -39,8 +39,9 @@ export function headerBlock(ctx: RuleContext): ParagraphInsert[] {
   }
 
   const out: ParagraphInsert[] = [];
-  if (!title) {
-    out.push({ position: "before", para: first.index, paragraphs: [{ text: DOC_TITLES[ctx.docType], bold: true, align: "center" }], rule: "header-title" });
+  const titleText = cfg.titles[ctx.docType]?.trim();
+  if (!title && titleText) {
+    out.push({ position: "before", para: first.index, paragraphs: [{ text: titleText, bold: true, align: "center" }], rule: "header-title" });
   }
   if (lines.length) {
     const anchor = header.length ? header[header.length - 1] : null;

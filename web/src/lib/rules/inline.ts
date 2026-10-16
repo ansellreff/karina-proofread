@@ -1,6 +1,7 @@
-import { INDONESIAN_ACRONYMS, INDONESIAN_UNIVERSITIES, INDONESIAN_UNIVERSITY_ACRONYMS } from "./data";
+import { fill, type BuiltInRules } from "./config";
+import { customInlineEdits } from "./custom";
 import { atSentenceStart, lowerField } from "./text";
-import { NARRATIVE, type RuleContext, type TextEdit } from "./types";
+import { NARRATIVE, rulesOf, type RuleContext, type TextEdit } from "./types";
 
 type Rule = (ctx: RuleContext) => TextEdit[];
 
@@ -85,10 +86,15 @@ const compounds: Rule = (ctx) => [
   })),
 ];
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** English name of an Indonesian university -> official Indonesian name, first mention only. */
 const indonesianUniversity: Rule = (ctx) => {
   const out: TextEdit[] = [];
-  for (const [re, official] of INDONESIAN_UNIVERSITIES) {
+  for (const { names, official } of rulesOf(ctx).lists.indonesianUniversities) {
+    const alts = names.map((n) => n.trim()).filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!alts.length || !official.trim()) continue;
+    const re = new RegExp(`\\b(?:${alts.map((a) => escapeRe(a).replace(/\s+/g, "\\s+")).join("|")})\\b`);
     for (const p of ctx.paras) {
       const m = re.exec(p.text);
       if (!m) continue;
@@ -104,10 +110,10 @@ const indonesianUniversity: Rule = (ctx) => {
 /** Write out Indonesian acronyms at first mention: "UIN" -> "UIN (Universitas Islam Negeri)". */
 const indonesianAcronyms: Rule = (ctx) => {
   const out: TextEdit[] = [];
-  for (const [acr, full] of Object.entries(INDONESIAN_ACRONYMS)) {
-    if (ctx.fullText.includes(full.replace(/ \.+$/, ""))) continue;
+  for (const { acronym: acr, full } of rulesOf(ctx).lists.indonesianAcronyms) {
+    if (!acr.trim() || !full.trim() || ctx.fullText.includes(full.replace(/ \.+$/, ""))) continue;
     for (const p of ctx.paras) {
-      const m = new RegExp(`\\b${acr}\\b`).exec(p.text);
+      const m = new RegExp(`\\b${escapeRe(acr)}\\b`).exec(p.text);
       if (!m) continue;
       const before = p.text.slice(0, m.index).trimEnd();
       if (/[A-Z][\p{L}]+$/u.test(before) && !atSentenceStart(p.text, m.index)) break; // part of a name ("Fordigi BUMN Hackathon")
@@ -123,28 +129,16 @@ const indonesianAcronyms: Rule = (ctx) => {
 /** "IPB" -> "Institut Pertanian Bogor (IPB)" at first mention, unless the full name is already there. */
 const universityAcronyms: Rule = (ctx) => {
   const out: TextEdit[] = [];
-  for (const [acr, full] of Object.entries(INDONESIAN_UNIVERSITY_ACRONYMS)) {
-    if (ctx.fullText.includes(full)) continue;
+  for (const { acronym: acr, full } of rulesOf(ctx).lists.universityAcronyms) {
+    if (!acr.trim() || !full.trim() || ctx.fullText.includes(full)) continue;
     for (const p of ctx.paras) {
-      const m = new RegExp(`(?<![(\\w])${acr}(?![\\w)])`).exec(p.text);
+      const m = new RegExp(`(?<![(\\w])${escapeRe(acr)}(?![\\w)])`).exec(p.text);
       if (!m) continue;
       out.push({ para: p.index, start: m.index, end: m.index + acr.length, text: `${full} (${acr})`, rule: "university-acronym", kind: "fix" });
       break;
     }
   }
   return out;
-};
-
-/** "at your university" -> ask for the real university name. */
-const yourUniversity: Rule = (ctx) => {
-  for (const p of ctx.paras) {
-    const m = /\byour (university|campus)\b/i.exec(p.text);
-    if (m) {
-      const at = m.index + m[0].length;
-      return [{ para: p.index, start: at, end: at, text: " (mention the university name, example: at National Taiwan University (NTU))", rule: "your-university", kind: "note" }];
-    }
-  }
-  return [];
 };
 
 /** A "Conclusion" heading in a personal document. */
@@ -155,54 +149,70 @@ const conclusionHeading: Rule = (ctx) => {
     const m = /^\s*(?:\d+\.\s*|[IVX]+\.\s*)?(Conclusion|CONCLUSION|Closing|Summary)\s*$/.exec(p.text);
     if (m) {
       const at = p.text.trimEnd().length;
-      return [{ para: p.index, start: at, end: at, text: ` (no need to write the title “${m[1]}”. It is not a report, but your personal ${kind})`, rule: "conclusion-heading", kind: "note" }];
+      const note = fill(rulesOf(ctx).builtIn.conclusionHeading.note, { heading: m[1], doctype: kind });
+      return [{ para: p.index, start: at, end: at, text: ` (${note})`, rule: "conclusion-heading", kind: "note" }];
     }
   }
   return [];
 };
 
-/** Very long paragraph: Karina's inline reminder. */
+/** Very long paragraph: Karina's inline reminder. Off by default: never matched her on the hold-out set (0/1). */
 const longParagraph: Rule = (ctx) => {
   if (!NARRATIVE.includes(ctx.docType)) return [];
+  const { note, maxSentences } = rulesOf(ctx).builtIn.longParagraph;
   return ctx.paras
-    .filter((p) => !p.inTable && p.sentences >= 10)
+    .filter((p) => !p.inTable && p.sentences >= maxSentences)
     .map((p) => {
       const at = p.text.trimEnd().length;
-      return { para: p.index, start: at, end: at, text: " (the paragraph is too long, shorten it! 1 paragraph min. 3 sentences, max 5-6 sentences)", rule: "long-paragraph", kind: "note" as const };
+      return { para: p.index, start: at, end: at, text: ` (${note})`, rule: "long-paragraph", kind: "note" as const };
     });
 };
 
-/** Resume: durations without a year, language without level. */
-const resume: Rule = (ctx) => {
+/** Resume: durations without a year. */
+const resumeYear: Rule = (ctx) => {
   if (ctx.docType !== "CV/Resume") return [];
+  const note = rulesOf(ctx).builtIn.resumeYear.note;
+  return ctx.paras
+    .filter((p) => p.words < 20 && /\|/.test(p.text) && /\b\d+\s*(?:months?|days?|years?)\b/i.test(p.text) && !/\b(?:19|20)\d{2}\b/.test(p.text))
+    .map((p) => {
+      const at = p.text.trimEnd().length;
+      return { para: p.index, start: at, end: at, text: ` (${note})`, rule: "resume-year", kind: "note" as const };
+    });
+};
+
+/** Resume: a language without its level. */
+const resumeLanguage: Rule = (ctx) => {
+  if (ctx.docType !== "CV/Resume") return [];
+  const note = rulesOf(ctx).builtIn.resumeLanguage.note;
   const out: TextEdit[] = [];
   for (const p of ctx.paras) {
-    const t = p.text;
-    if (p.words < 20 && /\|/.test(t) && /\b\d+\s*(?:months?|days?|years?)\b/i.test(t) && !/\b(?:19|20)\d{2}\b/.test(t)) {
-      const at = t.trimEnd().length;
-      out.push({ para: p.index, start: at, end: at, text: " (put the year)", rule: "resume-year", kind: "note" });
-    }
-    const lang = /^\s*Languages?\s*:.*?\bEnglish\b(?!\s*\()/i.exec(t);
+    const lang = /^\s*Languages?\s*:.*?\bEnglish\b(?!\s*\()/i.exec(p.text);
     if (lang) {
       const at = lang.index + lang[0].length;
-      out.push({ para: p.index, start: at, end: at, text: " (how’s the level)", rule: "resume-language", kind: "note" });
+      out.push({ para: p.index, start: at, end: at, text: ` (${note})`, rule: "resume-language", kind: "note" });
     }
   }
   return out;
 };
 
-export const INLINE_RULES: Rule[] = [
-  degreeCase,
-  spaceBeforeColon,
-  doubleSpace,
-  compounds,
-  indonesianUniversity,
-  universityAcronyms,
-  indonesianAcronyms,
-  yourUniversity,
-  conclusionHeading,
-  resume,
+/** Built-in inline rules in priority order (earlier wins an overlap), each switchable on the Review rules page. */
+const BUILT_IN: [keyof BuiltInRules | "custom", Rule][] = [
+  ["degreeCase", degreeCase],
+  ["spaceBeforeColon", spaceBeforeColon],
+  ["doubleSpace", doubleSpace],
+  ["hyphenCompounds", compounds],
+  ["indonesianUniversity", indonesianUniversity],
+  ["universityAcronyms", universityAcronyms],
+  ["indonesianAcronyms", indonesianAcronyms],
+  ["custom", customInlineEdits], // Karina's own replace/note rules
+  ["conclusionHeading", conclusionHeading],
+  ["longParagraph", longParagraph],
+  ["resumeYear", resumeYear],
+  ["resumeLanguage", resumeLanguage],
 ];
 
-/** Off by default: never matched Karina on the hold-out set (0/1); the end note covers paragraph balance. */
-export const OPTIONAL_RULES: Rule[] = [longParagraph];
+/** All inline edits the enabled rules make. */
+export function inlineEdits(ctx: RuleContext): TextEdit[] {
+  const b = rulesOf(ctx).builtIn;
+  return BUILT_IN.flatMap(([id, r]) => (id === "custom" || b[id].enabled ? r(ctx) : []));
+}

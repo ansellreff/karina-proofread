@@ -1,10 +1,20 @@
 import { paragraphRuns, type Para } from "../docx/paragraphs";
 import type { StyleResolver } from "../docx/styles";
 import type { Element } from "../docx/xml";
+import type { FormatStandard } from "./config";
 import { countWords } from "./text";
-import { NARRATIVE, type RuleContext } from "./types";
+import { rulesOf, type RuleContext } from "./types";
 
-export const STANDARD = { font: "Times New Roman", halfPoints: 24, jc: "both", minLine: 276, line: 360 };
+/** The formatting standard in Word's units (half-points, 240ths of a line). */
+export function standardOf(f: FormatStandard) {
+  return {
+    font: f.font.trim(),
+    halfPoints: Math.round(f.sizePt * 2),
+    jc: f.alignment === "justified" ? "both" : "left",
+    minLine: Math.round(f.minLineSpacing * 240),
+    line: Math.round(f.lineSpacing * 240),
+  };
+}
 
 export interface FormatPlan {
   deviated: boolean;
@@ -26,7 +36,9 @@ const top = <T>(counts: Map<T, number>): T | null => {
  */
 export function planFormatting(ctx: RuleContext, paras: Para[], styles: StyleResolver): FormatPlan {
   const empty: FormatPlan = { deviated: false, found: { font: null, size: null, jc: null, line: null }, runs: [], paras: [] };
-  if (!NARRATIVE.includes(ctx.docType)) return empty;
+  const cfg = rulesOf(ctx).format;
+  if (!cfg.autoFix.includes(ctx.docType)) return empty;
+  const STANDARD = standardOf(cfg);
 
   const body = paras.filter((p) => !p.inTable && countWords(p.text) >= 8);
   if (!body.length) return empty;
@@ -49,7 +61,7 @@ export function planFormatting(ctx: RuleContext, paras: Para[], styles: StyleRes
   const found = { font: top(fonts), size: top(sizes), jc: top(jcs), line: top(lines) };
   const badFont = found.font !== STANDARD.font;
   const badSize = found.size !== STANDARD.halfPoints;
-  const badJc = found.jc !== STANDARD.jc;
+  const badJc = STANDARD.jc === "both" ? found.jc !== "both" : found.jc === "both" || found.jc === "center" || found.jc === "right";
   const badLine = (found.line ?? 240) < STANDARD.minLine;
   const plan: FormatPlan = { deviated: badFont || badSize || badJc || badLine, found, runs: [], paras: [] };
 
@@ -66,7 +78,8 @@ export function planFormatting(ctx: RuleContext, paras: Para[], styles: StyleRes
     if (!bodySet.has(p.el)) continue;
     const pf = styles.para(p.el);
     const change: { jc?: string; line?: number } = {};
-    if (badJc && (pf.jc === "left" || pf.jc === "start" || pf.jc === null)) change.jc = STANDARD.jc;
+    if (badJc && STANDARD.jc === "both" && (pf.jc === "left" || pf.jc === "start" || pf.jc === null)) change.jc = STANDARD.jc;
+    if (badJc && STANDARD.jc === "left" && pf.jc === "both") change.jc = STANDARD.jc;
     if (badLine && (pf.line ?? 240) < STANDARD.minLine) change.line = STANDARD.line;
     if (change.jc || change.line) plan.paras.push({ p: p.el, change });
   }

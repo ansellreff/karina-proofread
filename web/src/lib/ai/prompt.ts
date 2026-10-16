@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import type { ChangeRecord } from "../pipeline";
+import { customAiInstructions } from "../rules/custom";
 import type { RuleContext } from "../rules/types";
 
 function promptsDir(): string {
@@ -80,6 +81,7 @@ export function userPrompt(ctx: RuleContext, ruleChanges: ChangeRecord[]): strin
     c.kind === "paragraph" ? `- added paragraph near P${c.paragraph}: "${c.after}"` : `- P${c.paragraph}: "${c.before}" -> "${c.after}"`,
   );
   const words = ctx.paras.reduce((n, p) => n + p.words, 0);
+  const extra = customAiInstructions(ctx);
   return `<document type="${ctx.docType}" words="${words}">
 ${lines.join("\n")}
 </document>
@@ -87,7 +89,7 @@ ${lines.join("\n")}
 <already_done>
 ${done.length ? done.join("\n") : "- (nothing)"}
 </already_done>
-
+${extra.length ? `\n<karina_extra_rules>\nKarina added these rules herself; follow them like the style guide:\n${extra.map((t) => `- ${t}`).join("\n")}\n</karina_extra_rules>\n` : ""}
 Budget for this ${words}-word document: good English -> at most 6 replacements; average -> about ${Math.round(words / 100)}; weak -> at most ${Math.round(words / 35)}. Inline notes: 2-6.
 Review this ${ctx.docType.toLowerCase()} in Karina's style and return the JSON.`;
 }

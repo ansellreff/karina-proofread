@@ -1,5 +1,6 @@
+import type { GrammarUse } from "./config";
 import { bodyParas } from "./detect";
-import type { RuleContext, TextEdit } from "./types";
+import { rulesOf, type RuleContext, type TextEdit } from "./types";
 
 type HarperLinter = {
   lint(text: string, options?: { language?: "plaintext" }): Promise<HarperLint[]>;
@@ -10,11 +11,12 @@ type HarperLint = {
   span(): { start: number; end: number };
   suggestions(): { get_replacement_text(): string; kind(): number }[];
   get_problem_text(): string;
+  message(): string;
 };
 
 let linter: Promise<HarperLinter> | null = null;
 
-async function getLinter(): Promise<HarperLinter> {
+export async function getLinter(): Promise<HarperLinter> {
   if (!linter) {
     linter = (async () => {
       const harper = await import("harper.js");
@@ -27,18 +29,14 @@ async function getLinter(): Promise<HarperLinter> {
   return linter;
 }
 
-/**
- * Lint kinds allowed to produce edits, tuned against Karina's real edits on the hold-out documents
- * (training/eval.py): Redundancy 3/3, Grammar 1/2, Spelling 5/12 (misses were US respellings, now skipped).
- * Capitalization (1/19), Style, Formatting and WordChoice (1/9 combined) are off.
+/*
+ * Which lint kinds produce edits is set on the Review rules page (config.grammar). Defaults were tuned against
+ * Karina's real edits (training/eval.py): Redundancy 3/3, Grammar 1/2, Spelling 5/12 (misses were US respellings,
+ * now skipped) are her style. Real errors she tends not to mark ("my self" -> "myself", "passionate in" ->
+ * "passionate about", a sentence starting in lower case) are "extra": applied, but flagged "beyond your style".
+ * "Typo" is never used: on academic text it splits technical compounds ("multisensor" -> "multi sensor").
+ * Capitalization is limited to sentence starts (elsewhere it "corrects" acronyms and names).
  */
-export const KARINA_GRAMMAR_KINDS = new Set(["Agreement", "Grammar", "Spelling", "Redundancy"]);
-/**
- * Real errors Karina tends not to mark ("my self" -> "myself"): applied, but flagged "beyond usual style" in the app.
- * "Typo" is off: on academic text it splits technical compounds ("multisensor" -> "multi sensor").
- */
-export const EXTRA_GRAMMAR_KINDS = new Set(["Miscellaneous", "Eggcorn", "Malapropism"]);
-export const DEFAULT_GRAMMAR_KINDS = new Set([...KARINA_GRAMMAR_KINDS, ...EXTRA_GRAMMAR_KINDS]);
 
 /**
  * Only trust spelling fixes that capitalise a proper noun ("english" -> "English", "taiwan" -> "Taiwan").
@@ -64,23 +62,33 @@ function isSpellingVariant(problem: string, suggestion: string): boolean {
  * Harper (offline grammar checker) suggestions restricted to body prose.
  * Spelling suggestions are skipped for capitalised words (names, places, programs).
  */
-export async function grammarEdits(ctx: RuleContext, kinds: Set<string> = DEFAULT_GRAMMAR_KINDS): Promise<TextEdit[]> {
+/** A lint worth acting on (shared by the edits and the score). */
+export function usableLint(kind: string, problem: string, replacement: string | null, message: string): boolean {
+  if (kind === "Typo") return false;
+  if (kind === "Spelling") return !/^\p{Lu}/u.test(problem) && replacement !== null && !isSpellingVariant(problem, replacement) && safeSpelling(problem, replacement);
+  if (kind === "Capitalization") return /does not start with a capital/i.test(message);
+  return true;
+}
+
+export async function grammarEdits(ctx: RuleContext, kinds?: Record<string, GrammarUse>): Promise<TextEdit[]> {
+  const use = kinds ?? rulesOf(ctx).grammar;
+  if (!Object.values(use).some((u) => u !== "off")) return [];
   const l = await getLinter();
   const out: TextEdit[] = [];
   for (const p of bodyParas(ctx)) {
     const lints = await l.lint(p.text, { language: "plaintext" });
     for (const lint of lints) {
       const kind = lint.lint_kind();
-      if (!kinds.has(kind)) continue;
+      const how = use[kind] ?? "off";
+      if (how === "off") continue;
       const sugg = lint.suggestions();
       if (sugg.length === 0) continue;
       const { start, end } = lint.span();
       const problem = p.text.slice(start, end);
-      if ((kind === "Spelling" || kind === "Typo") && /^\p{Lu}/u.test(problem)) continue;
       const s = sugg[0];
       const repl = s.get_replacement_text();
-      if (kind === "Spelling" && (isSpellingVariant(problem, repl) || !safeSpelling(problem, repl))) continue;
-      const beyondStyle = EXTRA_GRAMMAR_KINDS.has(kind);
+      if (!usableLint(kind, problem, repl, lint.message())) continue;
+      const beyondStyle = how === "extra";
       if (s.kind() === 2) out.push({ para: p.index, start: end, end, text: repl, rule: `harper:${kind}`, kind: "fix", beyondStyle });
       else out.push({ para: p.index, start, end, text: s.kind() === 1 ? "" : repl, rule: `harper:${kind}`, kind: "fix", beyondStyle });
     }

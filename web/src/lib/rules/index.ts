@@ -1,6 +1,6 @@
 import { endNote, type EndNoteOptions } from "./endnote";
 import { headerBlock } from "./header";
-import { INLINE_RULES } from "./inline";
+import { inlineEdits } from "./inline";
 import type { RuleContext, RuleOutput, TextEdit } from "./types";
 
 /** Drop edits that overlap an earlier (higher-priority) edit in the same paragraph. */
@@ -16,7 +16,7 @@ export function resolveOverlaps(edits: TextEdit[]): TextEdit[] {
 }
 
 export function runRules(ctx: RuleContext, opts: EndNoteOptions, extra: TextEdit[] = []): RuleOutput {
-  const edits = resolveOverlaps([...INLINE_RULES.flatMap((r) => r(ctx)), ...extra]);
+  const edits = resolveOverlaps([...inlineEdits(ctx), ...extra]);
   const inserts = [...headerBlock(ctx), ...endNote(ctx, opts)];
   return { edits, inserts };
 }

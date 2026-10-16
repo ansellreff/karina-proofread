@@ -6,6 +6,7 @@
  *
  *   --ai        add the Claude layer (needs ANTHROPIC_API_KEY in web/.env.local)
  *   --estimate  only print the token and cost estimate for the Claude layer (no proofreading, no charge)
+ *   --rules <file.json>  use these review rules instead of the saved ones (web/prompts/karina-rules.json)
  *
  * Output: <out>/<original name> with Karina's tracked changes (default out: ../training/output/bot),
  * plus <name>.changes.json listing every change (used by training/eval.py).
@@ -16,6 +17,7 @@ import path from "node:path";
 import type { Effort } from "../src/lib/ai/claude";
 import { usd } from "../src/lib/ai/cost";
 import { DEFAULT_MODEL, estimateAiCost, proofreadDocx, type AiOptions } from "../src/lib/pipeline";
+import { withDefaults } from "../src/lib/rules/config";
 
 async function main() {
   if (existsSync(".env.local")) process.loadEnvFile(".env.local");
@@ -25,7 +27,7 @@ async function main() {
     const i = args.indexOf(name);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  const valued = new Set(["--out", "--model", "--effort"]);
+  const valued = new Set(["--out", "--model", "--effort", "--rules"]);
   const inputs = args.filter((a, i) => !a.startsWith("--") && !valued.has(args[i - 1]));
   if (!inputs.length) {
     console.error("usage: npm run proofread -- <file.docx | folder> [--out <folder>] [--ai] [--estimate] [--json]");
@@ -37,6 +39,8 @@ async function main() {
     process.exit(1);
   }
   const ai: AiOptions | false = useAi ? { model: value("--model") ?? DEFAULT_MODEL, effort: (value("--effort") ?? "high") as Effort } : false;
+  const rulesFile = value("--rules");
+  const rules = rulesFile ? withDefaults(JSON.parse(await readFile(rulesFile, "utf8"))) : undefined;
   const outDir = path.resolve(value("--out") ?? path.join(process.cwd(), "..", "training", "output", "bot"));
   await mkdir(outDir, { recursive: true });
 
@@ -53,7 +57,7 @@ async function main() {
   for (const file of files) {
     const name = path.basename(file);
     const data = await readFile(file);
-    const opts = { fileName: name, grammar: !flag("--no-grammar"), ai };
+    const opts = { fileName: name, grammar: !flag("--no-grammar"), ai, rules };
 
     if (ai) {
       const est = await estimateAiCost(data, opts);

@@ -1,7 +1,7 @@
 import type { Para } from "../docx/paragraphs";
-import { TAIWAN_UNIVERSITIES } from "./data";
+import type { RuleConfig } from "./config";
 import { countSentences, countWords } from "./text";
-import type { DocType, ParaInfo, RuleContext } from "./types";
+import { rulesOf, type DocType, type ParaInfo, type RuleContext } from "./types";
 
 const TYPE_PATTERNS: [RegExp, DocType][] = [
   [/recommendation|reference letter/i, "Recommendation Letter"],
@@ -30,7 +30,7 @@ export function detectDocType(fileName: string, paras: ParaInfo[]): DocType {
   return "Unknown";
 }
 
-export function buildContext(fileName: string, paras: Para[], docType?: DocType): RuleContext {
+export function buildContext(fileName: string, paras: Para[], docType?: DocType, config?: RuleConfig): RuleContext {
   const infos: ParaInfo[] = paras.map((p) => {
     const words = countWords(p.text);
     return {
@@ -48,6 +48,7 @@ export function buildContext(fileName: string, paras: Para[], docType?: DocType)
     docType: docType ?? detectDocType(fileName, infos),
     paras: infos,
     fullText: infos.map((p) => p.text).join("\n"),
+    config,
   };
 }
 
@@ -75,9 +76,10 @@ export function detectName(ctx: RuleContext): string | null {
 
 export function detectUniversity(ctx: RuleContext): string | null {
   let best: { name: string; n: number } | null = null;
-  for (const u of TAIWAN_UNIVERSITIES) {
+  for (const u of rulesOf(ctx).lists.taiwanUniversities) {
+    if (!u.name.trim()) continue;
     let n = ctx.fullText.split(u.name).length - 1;
-    for (const s of u.short) n += (ctx.fullText.match(new RegExp(`\\b${s.replace(/ /g, "\\s")}\\b`, "g")) ?? []).length;
+    for (const s of u.short.filter((x) => x.trim())) n += (ctx.fullText.match(new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s")}\\b`, "g")) ?? []).length;
     if (n > 0 && (!best || n > best.n || (n === best.n && u.name.length > best.name.length))) best = { name: u.name, n };
   }
   return best?.name ?? null;
