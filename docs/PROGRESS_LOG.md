@@ -583,6 +583,14 @@ While cleaning up after a crashed test, I deleted every document in the local ap
 
 Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on her phone).
 
+## Decision: how the online app reaches OneDrive (2026-10-16)
+- **Karina's question:** is there a way without Azure?
+- **Alternatives looked at:**
+  - The app on this PC using the synced OneDrive folder (`C:\Users\…\OneDrive`), with no hosting at all.
+  - Vercel with a password login, plus a small helper on her PCs that copies files between the OneDrive folder and the app.
+- **Why they fall short:** a website on Vercel can only open OneDrive itself with Microsoft's permission. That means an app registration, which for a personal account lives in a free Azure directory. Without it, OneDrive is only reachable through a PC that is switched on.
+- **Decision:** Karina needs the app online **24/7 from any device**, so she will do the one-time registration ([ONLINE_SETUP.md](ONLINE_SETUP.md), Part 1). The plan is unchanged.
+
 ## Zoom in each document pane (2026-10-16)
 
 **Request:** pages are sometimes too small to read (especially side by side). She asked for a zoom slider like Word's in each panel. Then, while it was being built: it must not cover the document, so it should be a small icon that opens on hover.
