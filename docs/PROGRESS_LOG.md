@@ -456,3 +456,54 @@ While cleaning up after a crashed test, I deleted every document in the local ap
   - the save status.
 - 47 unit tests, lint, type check and the production build pass.
 - **The test now gives its own document a unique name** before it touches the Documents page. In one run it had matched one of your sample documents with the same file name; nothing was lost (your 5 documents are unchanged), but it can no longer happen. Its leftover copies in Recently deleted were erased, so the list is empty.
+
+## Learning loop: the bot learns from every document you finish (2026-10-16)
+
+**Request:** Karina chose the learning loop as the next round (planned and approved in plan mode). M4 stays on hold.
+
+### How it works
+- **Two ways in:**
+  - **Mark as done:** every document you mark as done is compared, without AI, in two ways:
+    - the student’s original against what you send (the document with your edits, and with every suggestion you left open counted as sent);
+    - what the bot had suggested against what you did with each suggestion.
+  - **Learn from a review you did in Word:** upload a .docx with your tracked changes on the new tab. The app rebuilds the student’s original and runs the rules engine on it to see what the bot would have suggested.
+- **For every bot suggestion it records one of three outcomes:**
+  - **kept** as suggested;
+  - **your own fix** in the same place;
+  - **undone**.
+- **It also records your own edits:** fixes, notes, header lines, end-note lines and cuts.
+- **Edits are placed and compared exactly as in the accuracy test** (training/eval.py), so the numbers mean the same thing.
+
+### New tab: Review rules → From your reviews
+- **Numbers:** how many documents it learned from, and what share of the bot’s suggestions you kept, fixed yourself or undid, overall and for each rule.
+- **Suggestions for your rules** (each with its evidence and up to 3 before/after examples):
+  - **New rules:** a fix you made 3+ times in 2+ documents. It is only suggested if, wherever that text appears in the documents you finished, you changed it at least 80% of the time. Also, an end-note line you keep writing for one document type.
+  - **Rules you often undo:** a rule whose suggestions you undid 70%+ of the time. It must be just as unhelpful in your newest documents (see the finding below).
+  - **Approving:**
+    - Add this rule puts it in Your rules, opened, for you to check before you press Save rules.
+    - Switch it off changes the rule on the page; it also waits for Save rules.
+    - Try it fills the Try it tab with an example sentence.
+  - **Dismiss:** it is never suggested again, and Undo brings it back.
+- **Examples for the AI:** your own notes and rewrites (with the student’s name removed). The ones you approve are sent with every AI proofread, up to 30. They cost almost nothing extra because that part of the prompt is cached.
+- **Documents it learned from:** each can be forgotten; your document itself is untouched.
+- **Badge:** the tab shows how many rule suggestions are waiting. Mark as done says what it learned (“Learned from this review: 2 suggestions for your rules”) with a link to the tab.
+- **Privacy:** the learned data stays in the local app folder like your documents (never committed). The 6 test documents are refused, so the accuracy test stays honest.
+
+### Tested on your 32 older reviews (the training folder, without the 6 test documents)
+- **Numbers:** the bot’s suggestions were kept 36%, replaced by your own fix 36%, undone 29%. You made 252 edits of your own.
+- **New rules: none qualified.** Your own word fixes rarely repeat: the same fix 3+ times in 2+ documents is rare. The precision check stopped the weak candidates; for example, “remove ‘the’” would have been right 4 times out of 755. This is the intended behaviour: suggestions appear as you finish more documents in the app.
+- **Finding: your style changes over time.** The first version proposed switching off the header lines, because in 16 of 22 older reviews you didn’t add them. Approving that on the 6 test documents (your newest) lowered the bot’s accuracy from 39% to 31% recall, because there you do add them. So a rule is now only proposed for switch-off if it is also unhelpful in the newest half of your documents. The review date comes from the dates on your tracked changes. With that check, approving every proposal leaves the accuracy unchanged instead of lowering it.
+- **The edits it reads match the ones the Python training scripts mined:** all 329 of your edits on these documents are found.
+- **AI examples: 15 were suggested.** Their effect on accuracy can only be measured with AI runs (about US$0.50 for the 6 test documents), which was not done without your OK.
+- **Side finding:** in some older documents, the header already had “Program:” and “University:” lines in its own format, and the bot still added “Applied for:” lines. Recognising those formats is a small rules-engine fix for later.
+
+### Verified
+- **57/57 end-to-end checks in a real browser.** New ones:
+  - Mark as done learns what was kept, undone and added;
+  - two uploaded reviews give a learned rule with its numbers;
+  - approving it opens it in Your rules, and once saved the engine uses it;
+  - a dismissed suggestion stays dismissed after a reload;
+  - Forget removes only that document.
+
+  The test removes everything it created (its documents, learned records and rule) by id; your 5 documents and rules were untouched.
+- 61 unit tests (14 new), lint, type check and the production build pass.

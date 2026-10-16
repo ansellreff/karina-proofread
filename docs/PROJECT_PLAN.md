@@ -1,6 +1,6 @@
 # Karina Proofread Bot — Project Plan
 
-_Last updated: 2026-10-16 (M4 on hold at Karina's request; local improvements first)_
+_Last updated: 2026-10-16 (learning loop built locally; M4 still on hold at Karina's request)_
 
 ## What we are building
 
@@ -43,6 +43,7 @@ Every rule is checked against Karina's real edits on 6 test documents that the b
 | Hosting | Vercel Hobby (free, personal use) |
 | Rules | Karina's rules live in `web/prompts/karina-rules.json`, edited on the Review rules page; engine, AI and score all read it |
 | Score | 0–100 without AI: grammar 35, clarity 15, formatting 20, structure 30. Karina's notes don't count; open bot fixes do |
+| Learning | No AI, no cost. Proposals need repeated evidence (a fix 3+ times in 2+ documents and right 80%+ of the time; a rule undone 70%+ of the time, also in her newest documents). Nothing changes until she approves. The 6 test documents are never learned from |
 | Isolation | Portable Node in `.tools/`, Python in `.venv/`. Nothing is installed on Windows |
 | Privacy | Student documents are never committed or deployed; examples are anonymised |
 
@@ -58,8 +59,9 @@ Each milestone ends with a review by Karina before the next one starts.
 | M3 | Web app (local): inbox, proofreading, Word-like review editor, **restore original**, export | ✅ Done (2026-10-16): 20/20 browser checks |
 | M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100**, resizable/collapsible panel, drag-and-drop side-by-side, **PDF input** | ✅ Done (2026-10-16): 43/43 browser checks, waiting for Karina's review |
 | M3++ | UI/UX round: **dark mode** (white or dark paper), documents search/filter/rename/delete+restore, review shortcuts, save status, view menu, tips, app icon | ✅ Done (2026-10-16): 52/52 browser checks, waiting for Karina's review |
+| M3+++ | **Learning loop** (local): every finished document teaches the bot; proposals (new rules, rules to switch off, AI examples) wait for Karina's approval on Review rules → From your reviews | ✅ Done (2026-10-16): 57/57 browser checks, waiting for Karina's review |
 | M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | ⏳ (on hold) |
-| M5 | Gmail auto-intake, learning loop (PDF input already done in M3+) | ⏳ |
+| M5 | Gmail auto-intake (learning loop and PDF input already done locally) | ⏳ |
 
 ### M2 — Claude layer
 - Claude proofreads in Karina's voice, following [web/prompts/karina-style-guide.md](../web/prompts/karina-style-guide.md) and anonymised examples.
@@ -89,8 +91,7 @@ Each milestone ends with a review by Karina before the next one starts.
 
 ### M5 — Automation and learning
 - Gmail → OneDrive intake with an adjustable interval (every 1/5/10/15/30 minutes or every 1–12 hours) and keyword.
-- Learning loop: Karina's final DONE_ files teach the bot new examples, and she approves what it learned.
-- PDF/CV input.
+- ~~Learning loop~~ and ~~PDF/CV input~~: done locally ahead of time (M3+++ and M3+).
 
 ## What Karina provides, and when
 

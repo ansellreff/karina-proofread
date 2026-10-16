@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DOC_TYPES, type RuleConfig } from "@/lib/rules/config";
 import type { PreviewChange } from "@/lib/rules/preview";
+import { ruleName } from "@/lib/rules/names";
 import type { DocType } from "@/lib/rules/types";
 import { NativeSelect, Section } from "./bits";
 
@@ -13,9 +14,9 @@ const SAMPLE = `STUDY PLAN
 I graduated with a Bachelor’s Degree in Business Management from Petra Christian University. As long as I study hard , I can reach my dream at your university.`;
 
 /** Paste a passage and see what the rules (as edited, saved or not) would do. No AI, no cost. */
-export function TryRules({ rules }: { rules: RuleConfig }) {
-  const [text, setText] = useState(SAMPLE);
-  const [docType, setDocType] = useState<DocType>("Study Plan");
+export function TryRules({ rules, sample }: { rules: RuleConfig; sample?: { text: string; docType: DocType } }) {
+  const [text, setText] = useState(sample?.text ?? SAMPLE);
+  const [docType, setDocType] = useState<DocType>(sample?.docType ?? "Study Plan");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ changes?: PreviewChange[]; errors?: string[] } | null>(null);
 
@@ -54,7 +55,7 @@ export function TryRules({ rules }: { rules: RuleConfig }) {
             {result.changes.map((c, i) => (
               <li key={i} className="px-3 py-2.5 text-sm">
                 <p className="mb-0.5 text-xs text-muted-foreground">
-                  {c.reason ?? ruleName(c.rule)}
+                  {c.reason ?? ruleName(c.rule, rules)}
                   {c.beyondStyle && <span className="beyond ml-2 rounded px-1 text-foreground">beyond your style</span>}
                 </p>
                 <p className="redline leading-relaxed whitespace-pre-line">
@@ -69,15 +70,4 @@ export function TryRules({ rules }: { rules: RuleConfig }) {
       )}
     </Section>
   );
-}
-
-function ruleName(rule: string): string {
-  if (rule.startsWith("harper:")) return `Grammar checker (${rule.slice(7)})`;
-  const names: Record<string, string> = {
-    "degree-case": "Degree name in lower case", "space-before-colon": "Space before a colon", "double-space": "Double space",
-    "hyphen-compound": "Hyphenated compound", "indonesian-university": "Official university name", "university-acronym": "University acronym",
-    "indonesian-acronym": "Indonesian acronym", "conclusion-heading": "Conclusion heading", "long-paragraph": "Long paragraph",
-    "resume-year": "CV: year", "resume-language": "CV: language level", "header-title": "Header: title", "header-fields": "Header lines", "end-note": "End Note block",
-  };
-  return names[rule] ?? rule;
 }

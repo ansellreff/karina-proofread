@@ -1,5 +1,6 @@
 export const RULE_TABS = [
   { id: "yours", label: "Your rules" },
+  { id: "learned", label: "From your reviews" },
   { id: "checks", label: "Built-in checks" },
   { id: "format", label: "Formatting" },
   { id: "grammar", label: "Grammar checker" },

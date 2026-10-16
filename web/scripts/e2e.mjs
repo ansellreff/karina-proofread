@@ -44,6 +44,7 @@ async function discard(id) {
 const cleanUp = async (e) => {
   console.error(e);
   if (job) await discard(job.id);
+  if (job) await fetch(`${base}/api/learn/job-${job.id}`, { method: "DELETE" }).catch(() => {});
   process.exit(1);
 };
 process.on("uncaughtException", cleanUp);
@@ -309,8 +310,11 @@ check("shortcuts: typing a letter in the document stays text", textAfter === tex
 // 4f. rename the student from the review page (used in the exported file names)
 await page.getByRole("button", { name: /Rename the student/ }).or(page.getByTitle(/Rename the student/)).first().click();
 await page.getByRole("textbox", { name: "Student’s name" }).fill("Ereview Tester");
-await page.getByRole("button", { name: "Save name" }).click();
-await page.waitForTimeout(600);
+await Promise.all([
+  page.waitForResponse((r) => r.url().endsWith(`/api/jobs/${job.id}`) && r.request().method() === "PATCH", { timeout: 30000 }),
+  page.getByRole("button", { name: "Save name" }).click(),
+]);
+await page.waitForTimeout(300);
 const renamed = await (await fetch(`${base}/api/jobs/${job.id}`)).json();
 check("rename the student from the review page", renamed.studentName === "Ereview Tester" && (await page.locator("h1").first().textContent())?.includes("Ereview Tester"), renamed.studentName);
 await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: job.studentName }) });
@@ -322,6 +326,15 @@ const saved = await (await fetch(`${base}/api/jobs/${job.id}`)).json();
 check("save creates a new version", saved.versions.length === 3, saved.versions.map((v) => v.label).join(" | "));
 const saveStatus = await page.getByText(/^Saved (just now|\d+ min ago)$/).first().isVisible().catch(() => false);
 check("save status shows when it was saved", saveStatus);
+
+// 5b. Mark as done teaches the bot (a learned record of this test's own document, removed at the end)
+await page.getByRole("button", { name: /Export/ }).first().click();
+await page.getByRole("menuitem", { name: "Mark as done" }).click();
+await page.getByText("Marked as done").first().waitFor({ timeout: 30000 });
+const learnedToast = await page.getByText(/The bot learned from this review|Learned from this review/).first().isVisible().catch(() => false);
+const jobRecord = (await (await fetch(`${base}/api/learn`)).json()).records.find((r) => r.id === `job-${job.id}`);
+check("mark as done: the bot learns what was kept, undone and added", learnedToast && !!jobRecord && jobRecord.suggestions.n > 0 && jobRecord.suggestions.kept > 0 && jobRecord.edits > 0, jobRecord ? `${jobRecord.edits} edits, ${JSON.stringify(jobRecord.suggestions)}` : "no record");
+await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "ready" }) });
 
 // 6. inspect the saved file
 const savedFile = new Uint8Array(await (await fetch(`${base}/api/jobs/${job.id}/file?v=${saved.current}`)).arrayBuffer());
@@ -391,6 +404,70 @@ try {
   await rp.close();
 } finally {
   await fetch(`${base}/api/rules`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules: savedRules.rules }) });
+}
+
+// 7d. Review rules -> From your reviews: upload reviews done in Word, approve a learned rule, dismiss, forget.
+// Uses two small made-up reviews; every learned record this test creates is removed by id afterwards.
+const stamp = Date.now().toString(36);
+const madeUp = async (n) => {
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const run = (t) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
+  const edit = (i) => `<w:p><w:del w:id="${2 * i}" w:author="Karina Octavia" w:date="2026-09-30T10:00:00Z"><w:r><w:delText xml:space="preserve">In order to</w:delText></w:r></w:del><w:ins w:id="${2 * i + 1}" w:author="Karina Octavia" w:date="2026-09-30T10:00:00Z"><w:r><w:t>To</w:t></w:r></w:ins>${run(` reach goal ${n}${i}, I practise every week with my friends at the campus.`)}</w:p>`;
+  const z = new JSZip();
+  z.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>`);
+  z.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body><w:p>${run("I graduated from a university in Indonesia with a degree in computer science and worked there for two years.")}</w:p>${edit(1)}${edit(2)}<w:sectPr/></w:body></w:document>`);
+  return Buffer.from(await z.generateAsync({ type: "uint8array" }));
+};
+const learnBefore = await (await fetch(`${base}/api/learn`)).json();
+const rulesBeforeLearn = await (await fetch(`${base}/api/rules`)).json();
+const e2eRecords = async () => (await (await fetch(`${base}/api/learn`)).json()).records.filter((r) => r.fileName.includes(`E2E learn ${stamp}`));
+try {
+  const lp = await newPage({ width: 1280, height: 900 });
+  await lp.goto(`${base}/rules?tab=learned`);
+  const input = lp.locator('input[aria-label="Word file with your tracked changes"]');
+  for (const n of ["A", "B"]) {
+    await input.setInputFiles({ name: `E2E learn ${stamp} ${n}.docx`, mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: await madeUp(n) });
+    await lp.getByText(`Learned from “E2E learn ${stamp} ${n}.docx”`).waitFor({ timeout: 30000 });
+  }
+  const mine = await e2eRecords();
+  const card = lp.locator("li[data-proposal]").filter({ hasText: "Replace “In order to” with “To”" });
+  const cardShown = await card.first().isVisible().catch(() => false);
+  check("From your reviews: two uploaded reviews give a learned rule with its evidence", mine.length === 2 && cardShown && /changed it 4 of \d+ times/.test((await card.first().textContent()) ?? ""), `${mine.length} records, card ${cardShown}`);
+
+  await card.first().getByRole("button", { name: "Add this rule" }).click();
+  const ruleItem = lp.locator('li[data-rule-id^="r-learned-"]').filter({ hasText: "In order to" });
+  const opened = await ruleItem.getByRole("textbox", { name: "Look for" }).isVisible().catch(() => false);
+  await lp.getByRole("button", { name: "Save rules" }).click();
+  await lp.getByText("Rules saved").waitFor({ timeout: 15000 });
+  const learnedRules = await (await fetch(`${base}/api/rules`)).json();
+  const preview = await (await fetch(`${base}/api/rules/preview`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "In order to win, I trained every single day with my team at the club.", docType: "Study Plan", rules: learnedRules.rules }),
+  })).json();
+  check("approving a learned rule opens it in Your rules, and once saved the engine uses it", opened && learnedRules.rules.custom.some((r) => r.id.startsWith("r-learned-") && r.find === "In order to") && preview.changes?.some((c) => c.before === "In order to" && c.after === "To"));
+
+  await lp.goto(`${base}/rules?tab=learned`);
+  const ex = lp.locator("li[data-proposal^='ex:']").filter({ hasText: /goal [AB]/ }).first();
+  const exKey = await ex.getAttribute("data-proposal");
+  await ex.getByRole("button", { name: "Dismiss" }).click();
+  await lp.getByText("Dismissed. It won’t be suggested again.").waitFor({ timeout: 10000 });
+  await lp.reload();
+  await lp.getByText(/Learned from \d+ document/).waitFor({ timeout: 20000 });
+  const stillThere = await lp.locator(`li[data-proposal="${exKey}"]`).count();
+  await fetch(`${base}/api/learn/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "undismiss", key: exKey }) });
+  check("a dismissed suggestion stays dismissed after a reload", !!exKey && stillThere === 0, exKey ?? "no example card");
+
+  await lp.getByRole("button", { name: /Documents it learned from/ }).click();
+  await lp.locator(`li[data-record="${mine[0].id}"]`).getByRole("button", { name: "Forget" }).click();
+  await lp.getByText(/The bot forgot/).waitFor({ timeout: 10000 });
+  const left = await e2eRecords();
+  const othersKept = (await (await fetch(`${base}/api/learn`)).json()).records.filter((r) => !r.fileName.includes(`E2E learn ${stamp}`)).length === learnBefore.records.length;
+  check("Forget removes only that learned document", left.length === 1 && left[0].id === mine[1].id && othersKept, `${left.length} left`);
+  await lp.screenshot({ path: path.join(out, "05-learned.png"), fullPage: true });
+  await lp.close();
+} finally {
+  for (const r of await e2eRecords()) await fetch(`${base}/api/learn/${encodeURIComponent(r.id)}`, { method: "DELETE" });
+  await fetch(`${base}/api/rules`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules: rulesBeforeLearn.rules }) });
 }
 
 // 7c. documents page: search, delete with Undo, Recently deleted -> Restore (only this test's own document)
@@ -516,6 +593,7 @@ check("no requests leave the app (privacy)", !blocked.some((b) => b.startsWith("
 console.log(`\nconsole errors (${consoleErrors.length}):`, consoleErrors.slice(0, 8));
 await browser.close();
 await discard(job.id);
+await fetch(`${base}/api/learn/job-${job.id}`, { method: "DELETE" }).catch(() => {}); // what it learned from this test's document
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${out}`);
 process.exit(failed ? 1 : 0);

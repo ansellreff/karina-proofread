@@ -7,8 +7,11 @@ import { StyleEditor } from "@/components/style-editor";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { validateRules, type RuleConfig } from "@/lib/rules/config";
+import { DOC_TYPES, validateRules, type RuleConfig } from "@/lib/rules/config";
+import { switchOff } from "@/lib/rules/names";
+import type { DocType } from "@/lib/rules/types";
 import { CustomRules } from "./custom-rules";
+import { LearnedFromReviews } from "./learned";
 import { BuiltInChecks, FormattingStandard, GrammarChecker, NameLists } from "./sections";
 import { RULE_TABS, type RuleTab } from "./tabs";
 import { TryRules } from "./try-rules";
@@ -20,6 +23,9 @@ export function RulesEditor({ initialTab }: { initialTab: RuleTab }) {
   const [tab, setTab] = useState<string>(initialTab);
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState<string[]>([]);
+  const [focusRule, setFocusRule] = useState<string | null>(null);
+  const [trySample, setTrySample] = useState<{ text: string; docType: DocType; n: number } | null>(null);
+  const [learnCount, setLearnCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/rules", { cache: "no-store" })
@@ -83,13 +89,35 @@ export function RulesEditor({ initialTab }: { initialTab: RuleTab }) {
             {RULE_TABS.map((t) => (
               <TabsTrigger key={t.id} value={t.id} className="flex-none">
                 {t.label}
+                {t.id === "learned" && learnCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[11px] leading-[18px] font-medium text-primary-foreground tabular-nums" aria-label={`${learnCount} suggestions`}>
+                    {learnCount}
+                  </span>
+                )}
               </TabsTrigger>
             ))}
           </TabsList>
         </div>
 
         <TabsContent value="yours">
-          <CustomRules rules={rules.custom} onChange={(custom) => change({ ...rules, custom })} />
+          <CustomRules rules={rules.custom} onChange={(custom) => change({ ...rules, custom })} focus={focusRule} />
+        </TabsContent>
+        <TabsContent value="learned" keepMounted>
+          <LearnedFromReviews
+            rules={rules}
+            onCount={setLearnCount}
+            onAddRule={(rule) => {
+              change({ ...rules, custom: [...rules.custom, rule] });
+              setFocusRule(rule.id);
+              selectTab("yours");
+              toast("Rule added below. Check it, then press Save rules.");
+            }}
+            onSwitchOff={(ruleId, docType) => change(switchOff(rules, ruleId, docType, DOC_TYPES))}
+            onTry={(sample) => {
+              setTrySample((s) => ({ ...sample, n: (s?.n ?? 0) + 1 }));
+              selectTab("try");
+            }}
+          />
         </TabsContent>
         <TabsContent value="checks">
           <BuiltInChecks b={rules.builtIn} onChange={(builtIn) => change({ ...rules, builtIn })} />
@@ -104,7 +132,7 @@ export function RulesEditor({ initialTab }: { initialTab: RuleTab }) {
           <NameLists lists={rules.lists} onChange={(lists) => change({ ...rules, lists })} />
         </TabsContent>
         <TabsContent value="try">
-          <TryRules rules={rules} />
+          <TryRules key={trySample?.n ?? 0} rules={rules} sample={trySample ?? undefined} />
         </TabsContent>
         <TabsContent value="ai">
           <p className="mb-3 max-w-[70ch] text-sm text-muted-foreground">

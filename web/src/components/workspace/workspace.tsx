@@ -3,10 +3,12 @@
 import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, Save, ScanText, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
+import { toastDone, type Learned } from "@/components/done-toast";
 import { RenameDialog } from "@/components/documents-list";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
 import { Tip } from "@/components/tip";
@@ -117,6 +119,7 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 const searchable = (s: string) => (s.split("\n").map((l) => l.trim()).find(Boolean) ?? "").slice(0, 80);
 
 export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string }) {
+  const router = useRouter();
   const [job, setJob] = useState(initialJob);
   /** The version file fetched into the editor (changing it reloads the editor). */
   const [loaded, setLoadedState] = useState(initialJob.current);
@@ -496,8 +499,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     const latest = dirty ? await save({ label: "Your edits" }) : job;
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     if (res.ok) {
-      setJob({ ...(await res.json()), current: latest.current });
-      toast.success("Marked as done");
+      const { learned, ...updated } = (await res.json()) as Job & { learned?: Learned };
+      setJob({ ...updated, current: latest.current });
+      toastDone(learned, () => router.push("/rules?tab=learned"));
     }
   }
 

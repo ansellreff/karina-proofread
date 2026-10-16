@@ -12,7 +12,7 @@ import { wDescendants, type Document } from "./docx/xml";
 import { KARINA } from "./identity";
 import type { RuleConfig } from "./rules/config";
 import { loadRules } from "./rules/config-store";
-import { buildContext } from "./rules/detect";
+import { buildContext, detectName } from "./rules/detect";
 import { planFormatting, type FormatPlan } from "./rules/format";
 import { grammarEdits } from "./rules/grammar";
 import { resolveOverlaps, runRules } from "./rules/index";
@@ -108,6 +108,23 @@ function ruleChangeRecords(p: Prepared): ChangeRecord[] {
     for (const np of ins.paragraphs) recs.push({ rule: ins.rule, kind: "paragraph", paragraph: ins.para, start: at, end: at, before: "", after: np.text });
   }
   return recs;
+}
+
+/**
+ * What the rules engine (no AI) would suggest for a document, without writing anything: the change list as
+ * proofreadDocx records it (one record per added block of paragraphs). Used by the learning loop.
+ */
+export async function ruleSuggestions(input: Uint8Array | ArrayBuffer, opts: ProofreadOptions): Promise<{ docType: DocType; paras: string[]; name: string | null; changes: ChangeRecord[] }> {
+  const p = await prepare(input, opts);
+  const changes: ChangeRecord[] = p.rules.edits.map((e) => ({
+    rule: e.rule, kind: e.kind, paragraph: e.para, start: e.start, end: e.end,
+    before: p.paras[e.para].text.slice(e.start, e.end), after: e.text, beyondStyle: e.beyondStyle, reason: e.reason,
+  }));
+  for (const ins of p.rules.inserts) {
+    const at = ins.position === "before" ? 0 : p.paras[ins.para].text.length;
+    changes.push({ rule: ins.rule, kind: "paragraph", paragraph: ins.para, start: at, end: at, before: "", after: ins.paragraphs.map((np) => np.text).join("\n") });
+  }
+  return { docType: p.ctx.docType, paras: p.paras.map((x) => x.text), name: detectName(p.ctx), changes };
 }
 
 /** Pre-run token and cost estimate for the Claude layer (uses the free token-counting endpoint). */

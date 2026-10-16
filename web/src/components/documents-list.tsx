@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { toastDone, type Learned } from "@/components/done-toast";
 import { NativeSelect } from "@/components/rules/bits";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,8 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
   async function setStatus(job: Job, status: JobStatus) {
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     if (!res.ok) return toast.error("Could not update the document.");
-    toast.success(status === "done" ? "Marked as done" : "Back in review");
+    if (status === "done") toastDone(((await res.json()) as { learned?: Learned }).learned, () => router.push("/rules?tab=learned"));
+    else toast.success("Back in review");
     router.refresh();
   }
 

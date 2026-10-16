@@ -1,5 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
+import type { LearnedExample } from "../learn/proposals";
+import { getLearnStore } from "../learn/store";
 import type { ChangeRecord } from "../pipeline";
 import { customAiInstructions } from "../rules/custom";
 import type { RuleContext } from "../rules/types";
@@ -13,6 +15,22 @@ function promptsDir(): string {
 
 let cachedSystem: string | null = null;
 
+/** Examples Karina approved from her recent reviews (Review rules → From your reviews), grouped by document type. */
+export function learnedExamples(list: LearnedExample[] = getLearnStore().examplesSync()): string {
+  if (!list.length) return "";
+  const types = [...new Set(list.map((x) => x.docType))];
+  const body = types
+    .map((t) => `### ${t}\n${list.filter((x) => x.docType === t).map((x) => `- ${x.kind === "note" ? "(note) " : ""}${x.text}`).join("\n")}`)
+    .join("\n\n");
+  return `
+<examples_from_recent_reviews>
+Edits Karina made herself in recent documents, [-deleted-]{+inserted+}. They show her current habits; follow them like the examples above.
+
+${body}
+</examples_from_recent_reviews>
+`;
+}
+
 /** Call after the rulebook is edited so the next run uses it. */
 export function resetPromptCache(): void {
   cachedSystem = null;
@@ -24,6 +42,7 @@ export function systemPrompt(): string {
   const dir = promptsDir();
   const guide = readFileSync(path.join(dir, "karina-style-guide.md"), "utf8");
   const examples = readFileSync(path.join(dir, "karina-examples.md"), "utf8");
+  const learned = learnedExamples();
   cachedSystem = `You proofread enrollment documents written by Indonesian students applying to universities in Taiwan, exactly the way Karina Octavia (an education consultant) reviews them in Microsoft Word with Track Changes. Your output becomes Karina's own tracked changes in the student's file, so it must read as if Karina typed it herself: her priorities, her amount of editing, her voice in notes.
 
 <style_guide>
@@ -33,7 +52,7 @@ ${guide}
 <examples>
 ${examples}
 </examples>
-
+${learned}
 <how_to_answer>
 The document arrives as numbered paragraphs: [P12] text. Return JSON only, matching the schema.
 

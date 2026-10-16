@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -150,8 +150,13 @@ function RuleForm({ rule, onChange }: { rule: CustomRule; onChange: (r: CustomRu
   );
 }
 
-export function CustomRules({ rules, onChange }: { rules: CustomRule[]; onChange: (r: CustomRule[]) => void }) {
-  const [open, setOpen] = useState<string | null>(null);
+export function CustomRules({ rules, onChange, focus }: { rules: CustomRule[]; onChange: (r: CustomRule[]) => void; focus?: string | null }) {
+  const [open, setOpen] = useState<string | null>(focus ?? null);
+  // a rule just added from "From your reviews" opens (initial state above) and comes into view
+  useEffect(() => {
+    if (!focus) return;
+    requestAnimationFrame(() => document.querySelector(`[data-rule-id="${CSS.escape(focus)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  }, [focus]);
   const update = (r: CustomRule) => onChange(rules.map((x) => (x.id === r.id ? r : x)));
   const add = () => {
     const r = newRule();
@@ -170,7 +175,7 @@ export function CustomRules({ rules, onChange }: { rules: CustomRule[]; onChange
       </div>
       <ol className="space-y-2">
         {rules.map((r) => (
-          <li key={r.id} data-rule-id={r.id} className={cn("rounded-lg border bg-card p-3 sm:p-4", !r.enabled && "bg-muted/40")}>
+          <li key={r.id} data-rule-id={r.id} className={cn("rounded-lg border bg-card p-3 sm:p-4", !r.enabled && "bg-muted/40", focus === r.id && "border-primary ring-3 ring-primary/20")}>
             <div className="flex items-start gap-3">
               <Switch checked={r.enabled} onCheckedChange={(enabled) => update({ ...r, enabled })} aria-label={`Use rule ${r.label || "without a name"}`} className="mt-0.5" />
               <div className={cn("min-w-0 flex-1", !r.enabled && "opacity-60")}>

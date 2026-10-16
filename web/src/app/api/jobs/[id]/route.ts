@@ -1,3 +1,4 @@
+import { learnFromJob } from "@/lib/learn/learn";
 import { getStore } from "@/lib/store/fs-store";
 import type { Job } from "@/lib/store/types";
 
@@ -23,7 +24,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;
   job.updatedAt = new Date().toISOString();
   await store.save(job);
-  return Response.json(job);
+  // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
+  let learned: Awaited<ReturnType<typeof learnFromJob>> = null;
+  if (body.status === "done") {
+    try {
+      learned = await learnFromJob(job, store);
+    } catch (e) {
+      console.error("learning from a finished document failed", e);
+    }
+  }
+  return Response.json(learned ? { ...job, learned } : job);
 }
 
 /** Moves the document to the trash (it can be restored from "Recently deleted"). */
