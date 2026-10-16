@@ -734,3 +734,15 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - Settings shows the unlock and can lock again.
 - The AI routes refuse without unlocking (403).
 - Full end-to-end test: **59/59** (new check: AI re-check and estimate refuse until unlocked; a wrong password is refused).
+
+## Side by side: the lock now links the zoom too
+**Request:** when the two sides are locked to scroll together, they should also keep the same zoom, so the pages can be compared at the same size.
+
+- **One lock for both:** the existing lock (the button on the divider, **View → Lock scroll and zoom (side by side)**, or the `L` key) now locks scrolling *and* zoom. Its labels say so.
+- **Turning the lock on** gives the original the review's current zoom.
+- **While locked,** any zoom change on either side (the − / + buttons, the slider, *Back to 100%*, Ctrl + mouse wheel, *Fit page width*) is copied to the other side at once.
+- **Unlocked,** each side keeps its own zoom, as before.
+
+### Verified
+- 77 unit tests, lint and type check pass.
+- Full end-to-end test (Word sample, no PDF): **54/54**. New check: locking makes both sides the same zoom; a zoom of 120% on the review goes to the original, and a + on the original brings the review to 130%. The existing check still confirms that unlocked sides zoom on their own.

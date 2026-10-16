@@ -154,7 +154,7 @@ export function SplitDivider({ container, ratio, onRatio, onCommit, order, locke
           type="button"
           onClick={onToggleLock}
           aria-pressed={locked}
-          aria-label={locked ? "Scroll locked: click to scroll each side on its own" : "Lock scroll: scroll both sides together"}
+          aria-label={locked ? "Scroll and zoom locked: click to scroll and zoom each side on its own" : "Lock scroll and zoom: both sides together"}
           title={locked ? "Scrolling together (L). Click to scroll each side on its own" : "Each side scrolls on its own (L). Click to scroll together"}
           className={cn(
             "absolute top-12 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full border shadow-sm transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",

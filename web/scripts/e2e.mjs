@@ -226,7 +226,7 @@ check("side by side: both pages fit their column", fits);
 await page.evaluate(() => (document.querySelector('[data-pane="review"] .superdoc__sub-document').scrollTop = 900));
 await page.waitForTimeout(600);
 const lockedTop = await paneScroll("original");
-await page.getByRole("button", { name: /Scroll locked/ }).click();
+await page.getByRole("button", { name: /Scroll and zoom locked/ }).click();
 await page.evaluate(() => (document.querySelector('[data-pane="review"] .superdoc__sub-document').scrollTop = 1800));
 await page.waitForTimeout(600);
 const unlockedTop = await paneScroll("original");
@@ -285,10 +285,10 @@ check("review panel: can be hidden, shown again and resized", hidden && asideW >
 {
   const zoomOf = () => page.evaluate(() => window.__superdoc.getZoomState());
   const bar = page.locator('[data-zoom="review"]');
-  const openBar = async () => {
-    const b = await bar.boundingBox();
+  const openBar = async (which = bar) => {
+    const b = await which.boundingBox();
     await page.mouse.move(b.x + b.width - 12, b.y + b.height / 2);
-    await bar.getByRole("button", { name: "Zoom in" }).waitFor({ timeout: 5000 });
+    await which.getByRole("button", { name: "Zoom in" }).waitFor({ timeout: 5000 });
   };
   const foldedSmall = (await bar.getByRole("slider").count()) === 0 && ((await bar.boundingBox())?.width ?? 999) < 48;
   const z0 = await zoomOf();
@@ -319,6 +319,29 @@ check("review panel: can be hidden, shown again and resized", hidden && asideW >
     `folded ${foldedSmall}/${foldsAgain}, ${z0.value} -> ${z1.value} -> ${z2.value} -> ${z3.value} -> ${z4.mode}`,
   );
   await page.mouse.move(rbox.x + rbox.width / 2, rbox.y + rbox.height / 2);
+
+  // the lock links the zoom too: locking gives the original the review's zoom, then a zoom on either side goes to both
+  const obar = page.locator('[data-zoom="original"]');
+  const originalZoom = async () => Number((await obar.getByRole("button", { name: /^Zoom \d+%/ }).first().getAttribute("aria-label")).match(/\d+/)[0]);
+  const unlockedOriginal = await originalZoom();
+  await page.getByRole("button", { name: /Lock scroll and zoom/ }).click();
+  await page.waitForTimeout(600);
+  const onLock = [(await zoomOf()).value, await originalZoom()];
+  await openBar();
+  await bar.getByRole("slider", { name: "Zoom" }).fill("120");
+  await page.waitForTimeout(400);
+  const fromReview = await originalZoom();
+  await openBar(obar);
+  await obar.getByRole("button", { name: "Zoom in" }).click();
+  await page.waitForTimeout(400);
+  const fromOriginal = (await zoomOf()).value;
+  await page.mouse.move(rbox.x + rbox.width / 2, rbox.y + rbox.height / 2);
+  await page.waitForTimeout(900);
+  check(
+    "zoom lock: with the scroll lock on, both sides always have the same zoom",
+    onLock[0] === onLock[1] && fromReview === 120 && fromOriginal === 130 && (await originalZoom()) === 130 && (await editorKept()),
+    `unlocked original ${unlockedOriginal}; on lock ${onLock.join("/")}; review 120 -> original ${fromReview}; original + -> review ${fromOriginal}`,
+  );
 }
 await page.getByRole("button", { name: /Side by side/ }).click();
 await page.waitForTimeout(500);

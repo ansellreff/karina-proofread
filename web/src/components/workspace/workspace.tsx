@@ -757,7 +757,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
                   Side by side <DropdownMenuShortcut>S</DropdownMenuShortcut>
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={sideBySide && scrollLock} disabled={!sideBySide} onCheckedChange={(c) => setScrollLock(c)}>
-                  Lock scroll (side by side) <DropdownMenuShortcut>L</DropdownMenuShortcut>
+                  Lock scroll and zoom (side by side) <DropdownMenuShortcut>L</DropdownMenuShortcut>
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={panelOpen} onCheckedChange={(c) => setPanelOpen(c)} className="hidden lg:flex">
                   Review panel <DropdownMenuShortcut>\</DropdownMenuShortcut>
@@ -856,7 +856,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
                   originalSd.current = s;
                   setPaneTick((t) => t + 1);
                 }} />
-                {!phone && <ZoomBar which="original" superdoc={getOriginalSd} ready={paneTick} pane={originalPane} />}
+                {!phone && <ZoomBar which="original" superdoc={getOriginalSd} ready={paneTick} pane={originalPane} partner={sideBySide && scrollLock ? getReviewSd : undefined} />}
               </div>
             </div>
           )}
@@ -910,7 +910,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           ) : (
             <EditorPlaceholder text="Opening the document…" />
           )}
-          {!phone && file && !editorError && <ZoomBar which="review" superdoc={getReviewSd} ready={paneTick} pane={reviewPane} />}
+          {!phone && file && !editorError && <ZoomBar which="review" superdoc={getReviewSd} ready={paneTick} pane={reviewPane} partner={sideBySide && scrollLock ? getOriginalSd : undefined} />}
           </div>
           </div>
           {sideBySide && paneDrag && <DropZones drag={paneDrag} />}

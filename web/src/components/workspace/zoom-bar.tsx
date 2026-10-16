@@ -14,23 +14,45 @@ const clamp = (n: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(n)
 /** Word's +/- buttons move to the next multiple of 10. */
 export const stepZoom = (v: number, dir: 1 | -1) => clamp(dir > 0 ? Math.floor(v / 10) * 10 + 10 : Math.ceil(v / 10) * 10 - 10);
 
+/** Give the other pane the same zoom (only when it differs, so two linked panes never echo each other). */
+function mirror(partner: (() => unknown) | undefined, value: number) {
+  const other = partner?.();
+  const theirs = zoomState(other);
+  if (theirs && theirs.value !== value) setZoomPercent(other, value);
+}
+
 /**
  * Word-style zoom for one pane. Folded, it is a small, faint magnifier in the pane's bottom-right corner, so it
  * never covers the page; hovering (or tapping, or tabbing to) it opens − slider + and the percentage, plus
  * "fit page width". Ctrl + mouse wheel over the pane zooms too. Each pane remembers its zoom ("fit" or a percentage).
+ *
+ * `partner` (side by side with the scroll lock on): the other pane, which then always has the same zoom. Any zoom
+ * Karina sets on either side is copied across; automatic re-fits are led by the review side.
  */
-export function ZoomBar({ which, superdoc, ready, pane }: { which: "review" | "original"; superdoc: () => unknown; ready: number; pane: RefObject<HTMLElement | null> }) {
+export function ZoomBar({ which, superdoc, ready, pane, partner }: { which: "review" | "original"; superdoc: () => unknown; ready: number; pane: RefObject<HTMLElement | null>; partner?: () => unknown }) {
   const [pref, setPref] = usePreference<number | "fit">(`zoom-${which}`, "fit");
   const [z, setZ] = useState<ZoomState | null>(null);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const partnerRef = useRef(partner);
+  const prefRef = useRef(pref);
+  useEffect(() => {
+    partnerRef.current = partner;
+    prefRef.current = pref;
+  });
 
   // follow the editor's zoom, and put back the zoom this pane had last time
   useEffect(() => {
     const sd = superdoc();
     if (!sd) return;
-    const off = onZoom(sd, setZ);
+    const off = onZoom(sd, (next) => {
+      setZ(next);
+      // a zoom set on this pane (here, or copied from the other side) is remembered for this pane
+      if (next.mode === "manual" && prefRef.current !== next.value) setPref(next.value);
+      // linked: chosen zooms go across both ways; the review side also carries its automatic fits
+      if (next.mode === "manual" || which === "review") mirror(partnerRef.current, next.value);
+    });
     const current = zoomState(sd);
     if (typeof pref === "number" && current?.value !== pref) setZoomPercent(sd, pref);
     else if (pref === "fit" && current?.mode === "manual") fitZoom(sd);
@@ -39,7 +61,17 @@ export function ZoomBar({ which, superdoc, ready, pane }: { which: "review" | "o
       off();
       cancelAnimationFrame(t);
     };
-  }, [superdoc, ready, pref]);
+  }, [superdoc, ready, pref, setPref, which]);
+
+  // turning the lock on: the original takes the review's zoom
+  useEffect(() => {
+    if (!partner || which !== "review") return;
+    const t = requestAnimationFrame(() => {
+      const mine = zoomState(superdoc());
+      if (mine) mirror(partner, mine.value);
+    });
+    return () => cancelAnimationFrame(t);
+  }, [partner, which, superdoc, ready]);
 
   // Ctrl + wheel over the pane, as in Word
   useEffect(() => {
@@ -86,8 +118,11 @@ export function ZoomBar({ which, superdoc, ready, pane }: { which: "review" | "o
     setPref(v);
   };
   const fit = () => {
-    fitZoom(superdoc());
+    const sd = superdoc();
+    fitZoom(sd);
     setPref("fit");
+    // linked: the other side takes this side's fitted size, so both show the same zoom
+    if (partner) requestAnimationFrame(() => mirror(partner, zoomState(sd)?.value ?? 100));
   };
 
   if (!z) return null;

@@ -17,7 +17,7 @@ export const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["\\"], label: "Show or hide the review panel" },
   { keys: ["O"], label: "Show the original, as received" },
   { keys: ["S"], label: "Side by side on/off" },
-  { keys: ["L"], label: "Lock scroll on/off (side by side)" },
+  { keys: ["L"], label: "Lock scroll and zoom on/off (side by side)" },
   { keys: ["Esc"], label: "Back to your review" },
   { keys: ["?"], label: "This list" },
 ];
