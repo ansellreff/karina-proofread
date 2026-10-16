@@ -42,6 +42,8 @@ first time, Windows opens a GitHub sign-in in your browser: approve it there.
    Type your new password twice (the typing is hidden). It prints two lines, `APP_PASSWORD_HASH=…` and
    `AUTH_SECRET=…`. Add each one to Vercel: the name is the part before `=`, the value is everything after it.
    The password itself is never saved anywhere; only its scrambled version is.
+   **Put these two only in Vercel, not in `web\.env.local`.** In that file they would put a password on the app on
+   this computer too, and the `.env` format can mangle the value.
 6. **Deployments → Redeploy.** Vercel shows the app's address, for example `karina-proofread.vercel.app`.
 
 ## 3. Your documents online
@@ -56,7 +58,14 @@ full screen like any other app. Each device stays signed in for 30 days; **Setti
 
 **Good to know**
 - **Wrong passwords:** after 5 wrong tries within 15 minutes, sign-in waits 15 minutes for that connection.
-- **Changing the password:** run step 5 again, replace `APP_PASSWORD_HASH` in Vercel, and redeploy.
+- **Changing the password:** in the app, go to **Settings → Account → Change password** (your current password, then
+  the new one twice). The device you're on stays signed in; every other device has to sign in again.
+- **Forgot the password:** run step 5 again with a new password, replace `APP_PASSWORD_HASH` in Vercel with the new
+  value, and **Redeploy**. The new password works straight away, and every device is signed out. Your documents are
+  kept. Only someone who can sign in to your Vercel account can do this (and that account can be recovered through
+  your email).
+- **If the app shows "The app's setup isn't finished":** it names the Vercel settings that are missing. Add them,
+  then redeploy.
 - **Updates:** I commit changes on this computer, show you what changed, and push only when you say so. Each push
   updates the online app by itself.
 - **On this computer:** the app also keeps working at http://localhost:3000, with its own local files.

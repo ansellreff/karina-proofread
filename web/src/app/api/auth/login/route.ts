@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/config";
 import { writeSession } from "@/lib/auth/current";
-import { clearFailures, lockedFor, recordFailure, verifyPassword } from "@/lib/auth/password";
+import { clearFailures, clientAddress, lockedFor, recordFailure, verifyPassword } from "@/lib/auth/password";
+import { currentPasswordHash, fingerprint } from "@/lib/auth/password-store";
 import { newSession } from "@/lib/auth/session";
 import { dataStores } from "@/lib/storage/stores";
 
@@ -16,15 +17,16 @@ export async function POST(request: Request) {
   if (!cfg) return back(request, "/");
   const form = await request.formData();
   const next = safeNext(form.get("next"));
-  const ip = (request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "local").split(",")[0].trim();
+  const ip = clientAddress(request);
   const files = (await dataStores()).data;
   const wait = await lockedFor(files, ip);
   if (wait) return back(request, `/login?error=locked&wait=${wait}&next=${encodeURIComponent(next)}`);
-  if (!(await verifyPassword(String(form.get("password") ?? ""), cfg.passwordHash))) {
+  const hash = await currentPasswordHash(files, cfg);
+  if (!(await verifyPassword(String(form.get("password") ?? ""), hash))) {
     await recordFailure(files, ip);
     return back(request, `/login?error=wrong&next=${encodeURIComponent(next)}`);
   }
   await clearFailures(files, ip);
-  await writeSession(cfg, newSession());
+  await writeSession(cfg, newSession(fingerprint(hash)));
   return back(request, next);
 }

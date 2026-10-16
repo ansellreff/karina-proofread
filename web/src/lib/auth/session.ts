@@ -4,6 +4,8 @@ import { EncryptJWT, jwtDecrypt } from "jose";
 export interface Session {
   v: 1;
   signedInAt: string;
+  /** Fingerprint of the password hash it was opened with: a password change ends every other session. */
+  pw: string;
 }
 
 export const SESSION_COOKIE = "kp_session";
@@ -32,6 +34,6 @@ export async function unseal<T>(token: string | null | undefined, secret: string
   }
 }
 
-export const newSession = (): Session => ({ v: 1, signedInAt: new Date().toISOString() });
+export const newSession = (pw: string): Session => ({ v: 1, signedInAt: new Date().toISOString(), pw });
 
 export const cookieOptions = (secure: boolean) => ({ httpOnly: true, secure, sameSite: "lax" as const, path: "/" });

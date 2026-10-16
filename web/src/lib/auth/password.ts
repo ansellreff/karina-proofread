@@ -6,20 +6,33 @@ import { readJson, writeJson, type AppFiles } from "../storage/files";
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: { N: number; r: number; p: number; maxmem: number }) => Promise<Buffer>;
 const PARAMS = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
-/** "scrypt$N$r$p$salt$hash" (base64). */
+/**
+ * "scrypt.N.r.p.salt.hash" (base64url): only letters, digits, ".", "-" and "_", so it pastes safely anywhere.
+ * Hashes made earlier with "$" separators and base64 still verify.
+ */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const hash = await scrypt(password, salt, 32, PARAMS);
-  return ["scrypt", PARAMS.N, PARAMS.r, PARAMS.p, salt.toString("base64"), hash.toString("base64")].join("$");
+  return ["scrypt", PARAMS.N, PARAMS.r, PARAMS.p, salt.toString("base64url"), hash.toString("base64url")].join(".");
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [kind, N, r, p, salt, hash] = stored.split("$");
+  const sep = stored.includes("$") ? "$" : ".";
+  const enc: BufferEncoding = sep === "$" ? "base64" : "base64url";
+  const [kind, N, r, p, salt, hash] = stored.trim().split(sep);
   if (kind !== "scrypt" || !salt || !hash) return false;
-  const want = Buffer.from(hash, "base64");
-  const got = await scrypt(password, Buffer.from(salt, "base64"), want.length, { N: Number(N), r: Number(r), p: Number(p), maxmem: PARAMS.maxmem });
-  return got.length === want.length && timingSafeEqual(got, want);
+  const want = Buffer.from(hash, enc);
+  if (!want.length) return false;
+  try {
+    const got = await scrypt(password, Buffer.from(salt, enc), want.length, { N: Number(N), r: Number(r), p: Number(p), maxmem: PARAMS.maxmem });
+    return got.length === want.length && timingSafeEqual(got, want);
+  } catch {
+    return false; // a damaged hash
+  }
 }
+
+/** The visitor's address (Vercel puts it first in x-forwarded-for). */
+export const clientAddress = (request: Request) => (request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "local").split(",")[0].trim();
 
 /** After this many wrong passwords from one address within the window, sign-in waits until the window passes. */
 export const LOCK = { tries: 5, windowMs: 15 * 60 * 1000 };

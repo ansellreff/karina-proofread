@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import { authConfig, databaseUrl } from "../auth/config";
 import { currentSession } from "../auth/current";
+import { currentPasswordHash, fingerprint } from "../auth/password-store";
 import { localStores, storesOn, type Stores } from "./local";
 import { neonQuery, PgFiles, pgliteQuery, type Query } from "./pg-files";
 
@@ -31,9 +32,16 @@ export async function dataStores(): Promise<Stores> {
   return url ? storesOn(await cloudFiles(url), "online") : localStores();
 }
 
-/** This request's stores; without a session (when a password is set) to the sign-in page. */
+/**
+ * This request's stores; without a valid session (when a password is set) to the sign-in page. A session opened
+ * with an earlier password (changed in the app, or reset in Vercel) is no longer valid.
+ */
 export async function stores(): Promise<Stores> {
   const cfg = authConfig();
-  if (cfg && !(await currentSession(cfg))) redirect("/login");
-  return dataStores();
+  const st = await dataStores();
+  if (cfg) {
+    const session = await currentSession(cfg);
+    if (!session || session.pw !== fingerprint(await currentPasswordHash(st.data, cfg))) redirect("/login");
+  }
+  return st;
 }

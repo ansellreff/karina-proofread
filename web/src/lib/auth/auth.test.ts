@@ -3,6 +3,7 @@ import { isHoldout } from "../learn/learn";
 import { MemoryFiles } from "../storage/files";
 import { authConfig, AuthConfigError, databaseUrl } from "./config";
 import { clearFailures, hashPassword, LOCK, lockedFor, recordFailure, verifyPassword } from "./password";
+import { changePassword, currentPasswordHash, fingerprint } from "./password-store";
 import { newSession, seal, unseal, type Session } from "./session";
 
 const SECRET = "x".repeat(40);
@@ -21,13 +22,30 @@ describe("online settings", () => {
 describe("password", () => {
   it("checks the password against its hash (never stored as is)", async () => {
     const hash = await hashPassword("Correct horse battery staple");
-    expect(hash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$/);
+    expect(hash).toMatch(/^scrypt\.\d+\.\d+\.\d+\.[\w-]+\.[\w-]+$/); // pastes safely: no $ + / =
     expect(hash).not.toContain("Correct");
     expect(await verifyPassword("Correct horse battery staple", hash)).toBe(true);
     expect(await verifyPassword("correct horse battery staple", hash)).toBe(false);
     expect(await verifyPassword("", hash)).toBe(false);
     expect(await verifyPassword("x", "not-a-hash")).toBe(false);
     expect(await hashPassword("same")).not.toBe(await hashPassword("same")); // salted
+    // a hash made with the first version ($ separators, base64) still works
+    const old = hash.split(".").map((part, i) => (i >= 4 ? Buffer.from(part, "base64url").toString("base64") : part)).join("$");
+    expect(await verifyPassword("Correct horse battery staple", old)).toBe(true);
+  });
+
+  it("changes the password in the app; a new hash set in Vercel takes over again (forgotten password)", async () => {
+    const files = new MemoryFiles();
+    const cfg = { passwordHash: await hashPassword("first password 1"), secret: SECRET };
+    expect(await currentPasswordHash(files, cfg)).toBe(cfg.passwordHash);
+    const changed = await changePassword(files, cfg, "second password 2");
+    expect(await verifyPassword("second password 2", await currentPasswordHash(files, cfg))).toBe(true);
+    expect(await verifyPassword("first password 1", await currentPasswordHash(files, cfg))).toBe(false);
+    expect(fingerprint(changed)).not.toBe(fingerprint(cfg.passwordHash)); // old sessions no longer match
+    const reset = { ...cfg, passwordHash: await hashPassword("recovery password 3") };
+    expect(await verifyPassword("recovery password 3", await currentPasswordHash(files, reset))).toBe(true);
+    expect(await verifyPassword("second password 2", await currentPasswordHash(files, reset))).toBe(false);
+    await expect(changePassword(files, cfg, "short")).rejects.toThrow(/at least/);
   });
 
   it("locks an address after repeated wrong passwords, for that address only, and frees it after the window", async () => {
@@ -47,7 +65,7 @@ describe("password", () => {
 
 describe("session cookie", () => {
   it("round-trips encrypted, and rejects tampering or another secret", async () => {
-    const sealed = await seal({ ...newSession() }, SECRET, 3600);
+    const sealed = await seal({ ...newSession("fp") }, SECRET, 3600);
     expect((await unseal<Session>(sealed, SECRET))?.v).toBe(1);
     expect(await unseal(sealed, "y".repeat(40))).toBeNull();
     expect(await unseal(`${sealed.slice(0, -4)}AAAA`, SECRET)).toBeNull();

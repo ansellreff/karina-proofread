@@ -83,7 +83,23 @@ try {
   }
 }
 
-// 5. sign out
+// 5. change the password in Settings: this device stays in, other devices are signed out, the old password stops
+const other = (await signIn(password, "198.51.100.8")).headers.get("set-cookie")?.split(";")[0] ?? "";
+const change = (current, next, c = cookie) => fetch(`${base}/api/auth/password`, { method: "POST", headers: { cookie: c, "Content-Type": "application/json" }, body: JSON.stringify({ current, next }), redirect: "manual" });
+const badChange = await change("not it", "a brand new password 1");
+const newPassword = `${password}-new`;
+const goodChange = await change(password, newPassword);
+const newCookie = (goodChange.headers.get("set-cookie") ?? "").split(";")[0];
+check("changing the password needs the current one", badChange.status === 400 && goodChange.ok && newCookie.startsWith("kp_session="), `${badChange.status} / ${goodChange.status}`);
+cookie = newCookie;
+const stillIn = (await get("/api/rules")).status;
+const otherOut = (await fetch(`${base}/api/rules`, { headers: { cookie: other }, redirect: "manual" })).status;
+check("after a change this device stays signed in, other devices are signed out", stillIn === 200 && [303, 307].includes(otherOut), `this ${stillIn}, other ${otherOut}`);
+const oldPw = await signIn(password, "198.51.100.9");
+const newPw = await signIn(newPassword, "198.51.100.9");
+check("the old password no longer works, the new one does", (oldPw.headers.get("location") ?? "").includes("error=wrong") && (newPw.headers.get("set-cookie") ?? "").startsWith("kp_session="));
+
+// 6. sign out
 const out = await fetch(`${base}/api/auth/logout`, { method: "POST", headers: { cookie }, redirect: "manual" });
 check("sign out clears the cookie", out.status === 303 && /kp_session=;/.test(out.headers.get("set-cookie") ?? "") && (out.headers.get("location") ?? "").includes("signedOut"));
 
