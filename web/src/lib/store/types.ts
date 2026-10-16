@@ -1,5 +1,6 @@
 import type { ChangeRecord } from "../pipeline";
 import type { DocType } from "../rules/types";
+import type { DocScore } from "../score/score";
 
 export type JobStatus = "new" | "proofreading" | "ready" | "done";
 
@@ -24,6 +25,8 @@ export interface ProofreadInfo {
   changes: ChangeRecord[];
   formatting: { deviated: boolean; runs: number; paragraphs: number };
   dropped?: { what: string; why: string }[];
+  /** Score of the student's original, and of the document with every suggestion accepted. */
+  score?: { original: DocScore; potential: DocScore };
 }
 
 export interface Job {
@@ -38,6 +41,8 @@ export interface Job {
   versions: Version[];
   current: number;
   proofread?: ProofreadInfo;
+  /** Latest score of the review in progress (updated as Karina accepts, rejects and edits). */
+  score?: { total: number; at: string };
 }
 
 export interface Settings {

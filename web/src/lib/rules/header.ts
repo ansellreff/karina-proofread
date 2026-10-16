@@ -7,6 +7,23 @@ const PROGRAM_RE = /program|programme|master|bachelor|degree|department|institut
 const UNIV_RE = /universit|institute of technology|college|\b(NTU|NCKU|NTHU|NYCU|NCCU|NTUST|NTNU|NSYSU|NCU|YZU|NDHU|STUST|NKUST|NCUE)\b/i;
 const looksLikeName = (t: string) => /^\s*[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+){1,4}\s*(\(.*\))?\s*$/u.test(t) && !TITLE_RE.test(t) && !PROGRAM_RE.test(t) && !UNIV_RE.test(t);
 
+/** A header line that is still a prompt for the student: "Applicant’s Name: ????", "(Program you applied for)". */
+const PLACEHOLDER = /\?{3,}|^\s*\((?:program|university)[^)]*\)\s*$|\.{5,}/i;
+
+/** Which header lines are present (placeholders don't count). Used by the header block and the score. */
+export function headerPresence(ctx: RuleContext) {
+  const header = headerZone(ctx);
+  const title = header.find((p) => TITLE_RE.test(p.text));
+  const rest = header.filter((p) => p !== title && !PLACEHOLDER.test(p.text));
+  return {
+    header,
+    title,
+    hasName: rest.some((p) => NAME_RE.test(p.text) || looksLikeName(p.text)),
+    hasProgram: rest.some((p) => PROGRAM_RE.test(p.text)),
+    hasUniversity: rest.some((p) => UNIV_RE.test(p.text)),
+  };
+}
+
 /**
  * Karina's header block: title, applicant name, program applied for, university.
  * Missing lines are added; unknown values are left as prompts for the student ("????").
@@ -14,11 +31,10 @@ const looksLikeName = (t: string) => /^\s*[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'�
 export function headerBlock(ctx: RuleContext): ParagraphInsert[] {
   const cfg = rulesOf(ctx).builtIn.headerBlock;
   if (!cfg.enabled || !NARRATIVE.includes(ctx.docType)) return [];
-  const header = headerZone(ctx);
   const first = ctx.paras.find((p) => p.text.trim());
   if (!first) return [];
 
-  const title = header.find((p) => TITLE_RE.test(p.text));
+  const { header, title } = headerPresence(ctx);
   const rest = header.filter((p) => p !== title);
   const hasName = rest.some((p) => NAME_RE.test(p.text) || looksLikeName(p.text));
   const hasProgram = rest.some((p) => PROGRAM_RE.test(p.text));

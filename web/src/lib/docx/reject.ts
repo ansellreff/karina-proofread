@@ -1,12 +1,16 @@
-import { isW, remove, unwrap, wChild, wChildren, wDescendants, type Document, type Element } from "./xml";
+import { isW, remove, unwrap, W_NS, wChild, wChildren, wDescendants, type Document, type Element } from "./xml";
 
-/** Reject every tracked change in a part (restores the author's original). */
-export function rejectAllRevisions(doc: Document): void {
+/**
+ * Reject tracked changes in a part (restores the author's original). With `only`, just the revisions whose
+ * w:id is in the set (the rest stay tracked).
+ */
+export function rejectAllRevisions(doc: Document, only?: Set<string>): void {
+  const picked = (el: Element) => !only || only.has(el.getAttributeNS(W_NS, "id") ?? el.getAttribute("w:id") ?? "");
   const isMarker = (el: Element) => isW(el.parentNode, "rPr");
-  for (const name of ["ins", "moveTo"]) for (const el of wDescendants(doc, name)) if (!isMarker(el)) remove(el);
+  for (const name of ["ins", "moveTo"]) for (const el of wDescendants(doc, name)) if (!isMarker(el) && picked(el)) remove(el);
   for (const name of ["del", "moveFrom"]) {
     for (const el of wDescendants(doc, name)) {
-      if (isMarker(el)) continue;
+      if (isMarker(el) || !picked(el)) continue;
       for (const t of wDescendants(el, "delText")) {
         const nt = doc.createElementNS(t.namespaceURI, "w:t");
         nt.setAttribute("xml:space", "preserve");
@@ -22,6 +26,7 @@ export function rejectAllRevisions(doc: Document): void {
     }
   }
   for (const ch of wDescendants(doc, "rPrChange")) {
+    if (!picked(ch)) continue;
     const rPr = ch.parentNode as Element;
     const old = wChild(ch, "rPr");
     const markers = wChildren(rPr).filter((c) => ["ins", "del"].includes(c.localName!));
@@ -30,6 +35,7 @@ export function rejectAllRevisions(doc: Document): void {
     if (old) while (old.firstChild) rPr.appendChild(old.firstChild);
   }
   for (const ch of wDescendants(doc, "pPrChange")) {
+    if (!picked(ch)) continue;
     const pPr = ch.parentNode as Element;
     const old = wChild(ch, "pPr");
     const keep = wChildren(pPr).filter((c) => ["rPr", "sectPr"].includes(c.localName!));
@@ -41,9 +47,9 @@ export function rejectAllRevisions(doc: Document): void {
   for (const p of paras) {
     const mark = wChild(wChild(p, "pPr") ?? p, "rPr");
     if (!mark || !isW(mark.parentNode, "pPr")) continue;
-    for (const d of wChildren(mark, "del")) remove(d);
+    for (const d of wChildren(mark, "del")) if (picked(d)) remove(d);
     const ins = wChild(mark, "ins");
-    if (!ins) continue;
+    if (!ins || !picked(ins)) continue;
     remove(ins);
     const next = p.nextSibling && isW(p.nextSibling, "p") ? (p.nextSibling as Element) : null;
     const content = Array.from(p.childNodes).filter((n) => !isW(n, "pPr"));

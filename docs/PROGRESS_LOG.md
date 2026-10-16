@@ -259,3 +259,72 @@ Karina's requests after trying the review screen:
   card, undo of "Accept all", jump to a change, the next arrow, and clicking a change in the document.
 - Phone layout checked separately: tap a card → panel closes, the document scrolls to the change, which is outlined.
 - 28 unit tests, lint and type check pass.
+
+## Local improvements before M4 (2026-10-16)
+
+Karina asked to hold M4 and improve the local app first.
+
+### 1. Review rules page (replaces "Style rulebook")
+**Request:** a page to adjust her reviewing style and add her own rules and conditions. What she saves must change what the bot does, and the page must start with the rules we already had, not empty.
+
+- All rules the bot used to have written in the code now live in one file, `web/prompts/karina-rules.json`.
+  - The proofreading engine, the AI, the score and the command-line proofreader all read that file.
+  - Saving on the page writes the file (the previous one is kept as a backup), and the next proofread follows it.
+- The page has these tabs:
+  - **Your rules:** "when … then …" rules. They can:
+    - replace a phrase;
+    - add a note after a phrase;
+    - add a line to the end Note when the document mentions or doesn't mention something, or is longer or shorter than a number of words;
+    - give the AI an instruction.
+
+    Each rule can be limited to certain document types and switched on or off. It starts with the 5 conditional rules learned from her reviews: CV guidelines, the 1st/2nd year plan, "Why Taiwan?", the future plan, and "your university".
+  - **Built-in checks:** each of her regular fixes and notes, with an on/off switch and editable wording. This covers degree names, colons, double spaces, hyphens, Indonesian names and acronyms, "Conclusion" headings, CV year and language notes, the header block, and the end Note checks (length limits per document type, essay word limits, paragraph balance, lists and tables, too many sections).
+  - **Formatting:** her standard (font, size, alignment, spacing, margins, page number) and which document types are fixed automatically. The reminder students see is generated from these values, so it always matches what the bot enforces.
+  - **Grammar checker:** for each kind of grammar check, choose Off, Your style, or Beyond your style (made but flagged in the app).
+  - **Names & acronyms:** the lists of Indonesian university names, acronyms and Taiwan universities.
+  - **Try it:** paste text and see what the rules would do, before saving. Free.
+  - **AI rulebook:** the plain-text style guide the AI reads (the old page).
+- **Proof that nothing changed:** before and after moving the rules into the file, the bot gave identical results on all 43 local documents.
+- **New "beyond your style" suggestions:** a wrong preposition ("passionate in" → "passionate about") and a sentence not starting with a capital letter. On the 43 documents they add only 5 suggestions, all correct.
+
+### 2. Compare with the original
+**Request:** an "Original" button next to Suggesting/Editing/Viewing, a side-by-side view, and a scroll lock. Both views can be switched on and off.
+
+- **Original** shows the student's file exactly as uploaded: read-only, no suggestions.
+- **Side by side** (PC and tablet) puts the original on the left and the review on the right.
+- **Scroll locked / Lock scroll** makes both sides scroll together, or each on its own. The review is longer because of the notes, so the two sides are matched by position: halfway down one is halfway down the other.
+- The review editor is never reloaded while comparing, so unsaved edits are safe.
+- **Fixed along the way:** in a half-width column the editor cut off the right edge of the page. The page now fits its column.
+
+### 3. Score out of 100
+**Request:** score the original document, with the score improving as she accepts suggestions and edits. Also suggest grammar and formatting fixes that fit each document type.
+
+- **What the score measures** (no AI, no cost):
+  - **Grammar & spelling, 35 points:** the offline checker, plus every bot fix not yet decided.
+  - **Clarity, 15 points:** very long sentences and wordy phrases.
+  - **Formatting, 20 points:** her standard for narrative documents; consistent font and size for CVs, letters and scripts.
+  - **Structure & completeness, 30 points:**
+    - narrative documents: header lines, length limit, paragraph balance, lists and tables, numbered sections, and her own "doesn't mention…" rules (such as "Why Taiwan?");
+    - CVs: contact details, sections, years, language level, length.
+- **Where it shows:**
+  - a new **Score** tab with the score now, the original, and "all suggestions accepted";
+  - a bar for each part, and every problem listed (click one to see it in the document);
+  - the score in the top bar and in the document list.
+- **How it updates:**
+  - It changes a moment after every accept, reject, undo or edit.
+  - Her notes to the student don't count: they are instructions, so the score rises when the student acts on them.
+  - A rejected suggestion stops counting as a problem: she judged the text fine.
+- **Calibration** on her 40 reviewed documents: the students' originals average **71**, her reviewed versions **87**.
+
+### A mistake on my side, and what changed because of it
+While cleaning up after a crashed test, I deleted every document in the local app except my three samples. That included a document Karina had uploaded and proofread herself (about US$0.10 of AI). It had no saved edits, and it can't be recovered. Her own file was not affected. To prevent this:
+- Deleting a document now moves it to `web/.data/trash/` instead of erasing it.
+- The test script removes only its own document, even when it crashes.
+- The clean-up helper only removes the documents it is given by name; it no longer has a "delete everything" mode.
+
+### Verified
+- **34/34 end-to-end checks in a real browser.** New ones:
+  - Original view, side by side fits, scroll lock, and the editor not reloading;
+  - score shown, score rising after Accept all and returning after Undo;
+  - a rule saved on the Review rules page reaching the engine. That test restores the rules file afterwards.
+- 41 unit tests, lint, type check and the production build all pass.

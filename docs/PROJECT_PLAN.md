@@ -1,6 +1,6 @@
 # Karina Proofread Bot — Project Plan
 
-_Last updated: 2026-10-16_
+_Last updated: 2026-10-16 (M4 on hold at Karina's request; local improvements first)_
 
 ## What we are building
 
@@ -41,6 +41,8 @@ Every rule is checked against Karina's real edits on 6 test documents that the b
 | Storage / sign-in | Personal OneDrive through Microsoft Graph; Microsoft sign-in limited to Karina |
 | Email intake | Google Apps Script; check interval and keyword editable in the app's Settings |
 | Hosting | Vercel Hobby (free, personal use) |
+| Rules | Karina's rules live in `web/prompts/karina-rules.json`, edited on the Review rules page; engine, AI and score all read it |
+| Score | 0–100 without AI: grammar 35, clarity 15, formatting 20, structure 30. Karina's notes don't count; open bot fixes do |
 | Isolation | Portable Node in `.tools/`, Python in `.venv/`. Nothing is installed on Windows |
 | Privacy | Student documents are never committed or deployed; examples are anonymised |
 
@@ -54,6 +56,7 @@ Each milestone ends with a review by Karina before the next one starts.
 | M1 | Style learning, Word tracked-changes engine, Karina Rules Engine | ✅ Done (2026-10-16) |
 | M2 | Claude layer, accuracy test (rules vs. rules + AI), token/cost estimate | ✅ Done (2026-10-16): 56% recall / 58% precision, US$0.09 per doc |
 | M3 | Web app (local): inbox, proofreading, Word-like review editor, **restore original**, export | ✅ Done (2026-10-16): 20/20 browser checks |
+| M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100** | ✅ Done (2026-10-16): 34/34 browser checks, waiting for Karina's review |
 | M4 | OneDrive, Microsoft sign-in, PDF export, deploy to Vercel, phone install, cost tracker | ⏳ |
 | M5 | Gmail auto-intake, learning loop, PDF/CV input | ⏳ |
 

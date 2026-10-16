@@ -1,5 +1,7 @@
 import { KARINA } from "@/lib/identity";
 import { proofreadDocx } from "@/lib/pipeline";
+import { loadRules } from "@/lib/rules/config-store";
+import { proofreadScores } from "@/lib/score/job-score";
 import { getStore } from "@/lib/store/fs-store";
 
 export const runtime = "nodejs";
@@ -25,7 +27,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       try {
         job.status = "proofreading";
         await store.save(job);
-        const result = await proofreadDocx(await store.readVersion(id, 0), {
+        const original = await store.readVersion(id, 0);
+        const result = await proofreadDocx(original, {
           fileName: job.fileName,
           identity: { ...KARINA, author: settings.authorName },
           ai: ai ? { model: settings.model, effort: settings.effort } : false,
@@ -49,6 +52,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           formatting: result.formatting,
           dropped: result.ai?.dropped,
         };
+        try {
+          updated.proofread.score = await proofreadScores(updated, original, result.output, result.changes, await loadRules());
+          updated.score = { total: updated.proofread.score.original.total, at: updated.proofread.at };
+        } catch (e) {
+          console.warn("scoring failed", e); // the proofread itself is fine; the score just stays empty
+        }
         await store.save(updated);
         if (result.ai) {
           await store.logUsage({ at: updated.proofread.at, jobId: id, model: result.ai.model, costUsd: result.ai.costUsd, usage: result.ai.usage });

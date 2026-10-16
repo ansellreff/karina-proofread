@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rm, writeFile, appendFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { DocxPackage } from "../docx/package";
 import { bodyParagraphs } from "../docx/paragraphs";
@@ -66,8 +66,13 @@ export class FsJobStore implements JobStore {
     await writeFile(path.join(this.dir(job.id), "meta.json"), JSON.stringify(job, null, 1));
   }
 
+  /** Deleting moves the document to .data/trash/ (never erased), so a wrong delete can always be undone by hand. */
   async remove(id: string): Promise<void> {
-    await rm(this.dir(id), { recursive: true, force: true });
+    const trash = path.join(this.root, "trash");
+    await mkdir(trash, { recursive: true });
+    await rename(this.dir(id), path.join(trash, `${id}_${new Date().toISOString().replace(/[:.]/g, "-")}`)).catch(async (e: NodeJS.ErrnoException) => {
+      if (e.code !== "ENOENT") throw e;
+    });
   }
 
   async readVersion(id: string, n: number): Promise<Uint8Array> {

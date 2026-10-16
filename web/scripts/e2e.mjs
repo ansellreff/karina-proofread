@@ -33,6 +33,14 @@ form.append("files", new Blob([await readFile(sample)]), path.basename(sample));
 const up = await (await fetch(`${base}/api/jobs`, { method: "POST", body: form })).json();
 const job = up.created?.[0];
 check("upload .docx", !!job, up.errors?.join("; "));
+// if the run crashes, remove only this test's own document (never anything else in the app)
+const cleanUp = async (e) => {
+  console.error(e);
+  if (job) await fetch(`${base}/api/jobs/${job.id}`, { method: "DELETE" }).catch(() => {});
+  process.exit(1);
+};
+process.on("uncaughtException", cleanUp);
+process.on("unhandledRejection", cleanUp);
 const pr = await fetch(`${base}/api/jobs/${job.id}/proofread`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ai: false }) });
 const lines = (await pr.text()).trim().split("\n").map((l) => JSON.parse(l));
 const last = lines.at(-1);
@@ -113,11 +121,36 @@ const cardUndoShown = (await cardUndo.count()) === 1 && (await panel.getByText(/
 await cardUndo.first().click();
 const afterCardUndo = await waitChange(afterReject2);
 check("rejected card shows its own Undo button that brings it back", cardUndoShown && afterReject2 !== afterToastUndo && afterCardUndo === afterToastUndo, `${afterToastUndo} -> ${afterReject2} -> ${afterCardUndo}`);
+// live score: read it, Accept all, read again, Undo, read again
+const scoreNow = () => panel.locator("[data-testid=score-now]").first().textContent().then(Number).catch(() => NaN);
+const scoreAfter = async (prev) => {
+  for (let i = 0; i < 60; i++) {
+    const s = await scoreNow();
+    if (!Number.isNaN(s) && s !== prev) return s;
+    await page.waitForTimeout(500);
+  }
+  return scoreNow();
+};
+await panel.getByRole("tab", { name: /^Score/ }).click();
+await panel.locator("[data-testid=score-now]").waitFor({ timeout: 60000 }).catch(() => {});
+await page.waitForTimeout(2500); // let the score settle after the earlier accept/reject
+const score0 = await scoreNow();
+check("score out of 100 is shown after proofreading", score0 > 0 && score0 <= 100, `${score0}`);
+await panel.getByRole("tab", { name: /What changed/ }).click();
 await panel.getByRole("button", { name: "Accept all" }).click();
 const afterAll = await waitChange(afterToastUndo);
+await panel.getByRole("tab", { name: /^Score/ }).click();
+const score1 = await scoreAfter(score0);
+check("accepting the suggestions raises the score", score1 > score0, `${score0} -> ${score1}`);
+await page.screenshot({ path: path.join(out, "02f-score.png") });
+await panel.getByRole("tab", { name: /What changed/ }).click();
 await panel.getByRole("button", { name: "Undo", exact: true }).click();
 const afterAllUndo = await waitChange(afterAll);
 check("undo in the panel reverses Accept all", /^0 of/.test(afterAll ?? "") && afterAllUndo === after2, `${afterAll} -> ${afterAllUndo}`);
+await panel.getByRole("tab", { name: /^Score/ }).click();
+const score2 = await scoreAfter(score1);
+check("undoing brings the score back", score2 === score0, `${score1} -> ${score2}`);
+await panel.getByRole("tab", { name: /What changed/ }).click();
 
 // 4c. click a change in the panel -> the document scrolls to it
 const docScroll = () => page.evaluate(() => document.querySelector(".superdoc__sub-document")?.scrollTop ?? -1);
@@ -231,6 +264,30 @@ const restoredBytes = new Uint8Array(await (await fetch(`${base}/api/jobs/${job.
 check("restore original: new version, identical to the uploaded file", restored.versions.at(-1).kind === "restore" && Buffer.compare(Buffer.from(origBytes), Buffer.from(restoredBytes)) === 0);
 check("restore original: editor shows no tracked changes", restoredCount === 0, `${restoredCount}`);
 await page.screenshot({ path: path.join(out, "03-restored-desktop.png") });
+
+// 7b. Review rules page: a rule added and saved on the page reaches the rules engine (the saved file is restored after)
+const savedRules = await (await fetch(`${base}/api/rules`)).json();
+try {
+  const rp = await newPage({ width: 1280, height: 900 });
+  await rp.goto(`${base}/rules`);
+  await rp.getByRole("button", { name: "Add a rule" }).click();
+  const form = rp.locator("li[data-rule-id]").last();
+  await form.getByRole("textbox", { name: "Name" }).fill("e2e: wordy phrase");
+  await form.getByRole("textbox", { name: "Look for" }).fill("in order to");
+  await form.getByRole("textbox", { name: "Replace with" }).fill("to");
+  await rp.getByRole("button", { name: "Save rules" }).click();
+  await rp.getByText("Rules saved").waitFor({ timeout: 15000 });
+  const now = await (await fetch(`${base}/api/rules`)).json();
+  const added = now.rules.custom.find((r) => r.label === "e2e: wordy phrase");
+  const preview = await (await fetch(`${base}/api/rules/preview`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "I study hard in order to reach my dream of becoming an engineer in the future.", docType: "Study Plan", rules: now.rules }),
+  })).json();
+  check("Review rules page: a saved rule is in the rules file and used by the engine", !!added && preview.changes?.some((c) => c.before === "in order to" && c.after === "to"));
+  await rp.close();
+} finally {
+  await fetch(`${base}/api/rules`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules: savedRules.rules }) });
+}
 
 // 8. phone layout
 const phone = await newPage({ width: 390, height: 844 });

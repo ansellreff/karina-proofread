@@ -22,7 +22,7 @@ function Row({ job }: { job: Job }) {
     <li>
       <Link
         href={`/jobs/${job.id}`}
-        className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 transition-colors hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:outline-none sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_9rem_5rem] sm:px-5"
+        className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 transition-colors hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:outline-none sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_12rem_5rem] sm:px-5"
       >
         <div className="min-w-0">
           <p className="truncate font-serif text-[1.02rem] font-semibold">{job.studentName ?? "Unnamed student"}</p>
@@ -38,6 +38,11 @@ function Row({ job }: { job: Job }) {
         </div>
         <div className="col-span-2 flex items-center gap-3 sm:col-span-1">
           <StatusChip status={job.status} />
+          {job.proofread?.score && (
+            <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="Score out of 100: original → latest">
+              {job.proofread.score.original.total} → <span className="font-medium text-foreground">{job.score?.total ?? job.proofread.score.original.total}</span>
+            </span>
+          )}
           <span className="text-xs text-muted-foreground sm:hidden">{when(job.updatedAt)}</span>
         </div>
         <span className="hidden text-right text-sm text-muted-foreground tabular-nums sm:block">{when(job.updatedAt)}</span>

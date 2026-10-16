@@ -23,7 +23,9 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; npm test` — docx writer + rules + AI-layer unit tests
 - `cd web; npm run dev` → http://localhost:3000 (jobs stored in `web/.data/`, gitignored)
 - `cd web; node scripts/e2e.mjs <sample.docx>` — full browser check (system Edge via playwright-core; dev server must run)
-- `cd web; node scripts/seed.mjs <files> [--ai]` / `node scripts/clear-jobs.mjs` — load or clear documents in the local app
+- `cd web; node scripts/seed.mjs <files> [--ai]` — load documents into the local app
+- `cd web; node scripts/clear-jobs.mjs [<jobId> ...]` — list jobs, or move the given ones to `web/.data/trash/`. Karina uploads her own documents to the local app too: never delete a job you didn't create in this session.
+- `cd web; npx tsx scripts/score-docs.ts <file|folder>` — score documents (original vs. reviewed) to calibrate the score
 
 ## Web app notes
 - SuperDoc v2 (`@superdoc/react`): document API is async (`activeEditor.doc.*` returns promises); `viewing.trackedChanges` must be `'markup'|'final'|'original'`; telemetry must stay `{ enabled: false }`.
@@ -33,6 +35,8 @@ Private web app that proofreads student enrollment documents (study plans, autob
 ## Engine
 - `web/src/lib/docx/` — OOXML engine (accept/reject, tracked insert/delete/format, Word-exact metadata). Element order in rPr/pPr matters (Word rejects out-of-order).
 - `web/src/lib/rules/` — Karina Rules Engine. Every rule is backed by measured precision on her data; Harper limited to kinds that match her.
+- `web/prompts/karina-rules.json` — Karina's editable rules (Review rules page, `lib/rules/config.ts` = types + factory defaults). Never hard-code rule wording or lists in the engine; add them to the config. After engine changes, compare `npm run proofread -- <docs> --rules <file>` output before/after.
+- `web/src/lib/score/` — document score (0–100, no AI). Calibrate with `scripts/score-docs.ts` on the training folder.
 - `web/prompts/karina-style-guide.md` — her rulebook (anonymised), used by the AI layer in M2.
 
 ## Output rules

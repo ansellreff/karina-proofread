@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import { OriginalPane } from "./original-pane";
+import { ScorePanel, scoreTone, type Scores } from "./score-panel";
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
@@ -261,6 +262,56 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     if (!found) toast(c.live.length ? "Could not scroll to this change." : "This change is already resolved and its text is no longer in the document.");
   };
 
+  // ---- live score: re-scored a moment after every change (accept, reject, typing), from the editor's content
+  const [scores, setScores] = useState<Scores | null>(null);
+  const [scoring, setScoring] = useState(false);
+  const scoreRun = useRef(0);
+  const canScore = !!job.proofread && shown >= job.proofread.version;
+  // what is still open, from the panel (exact even after undo, when the editor gives restored changes new ids)
+  const pending = useMemo(
+    () => ({
+      ids: panelChanges.flatMap((c) => c.live.flatMap((t) => t.wordIds)),
+      fixes: panelChanges.filter((c) => (c.kind === "fix" || c.kind === "delete") && c.live.length > 0).length,
+    }),
+    [panelChanges],
+  );
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    if (!canScore || !sd.current) return;
+    const run = ++scoreRun.current;
+    const t = setTimeout(async () => {
+      if (!sd.current) return;
+      setScoring(true);
+      try {
+        const blob = await exportDocx(sd.current);
+        const form = new FormData();
+        form.append("file", new File([blob], job.fileName));
+        form.append("pending", JSON.stringify(pendingRef.current.ids));
+        form.append("openFixes", String(pendingRef.current.fixes));
+        const res = await fetch(`/api/jobs/${job.id}/score`, { method: "POST", body: form });
+        if (res.ok && run === scoreRun.current) setScores((await res.json()) as Scores);
+      } catch {
+        /* the score is a helper; never interrupt the review over it */
+      } finally {
+        if (run === scoreRun.current) setScoring(false);
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [tracked, canScore, job.id, job.fileName]);
+
+  async function showScoreItem(text: string) {
+    if (phone) setSheetOpen(false);
+    clearActiveTracked(sd.current);
+    setActiveId(null);
+    // an open tracked change inside the passage splits the text, so also try the words before and after it
+    const words = text.split(/\s+/);
+    const half = Math.ceil(words.length / 2);
+    const tries = [text, words.slice(0, half).join(" "), words.slice(half - 1).join(" ")].filter((t, i, a) => t.length >= 6 && a.indexOf(t) === i);
+    for (const t of tries) if (await focusText(sd.current, t)) return;
+    toast("That passage has changed since, so it can’t be found any more.");
+  }
+
   /** Phone: step through all changes without opening the panel. */
   const stepAll = (dir: 1 | -1) => {
     const stops = panelChanges.filter(canLocate);
@@ -383,9 +434,12 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
 
   const panel = (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="flex h-full min-h-0 flex-col gap-0">
-      <TabsList variant="line" className="h-11 w-full shrink-0 justify-start gap-3 rounded-none border-b px-4">
+      <TabsList variant="line" className="h-11 w-full shrink-0 justify-start gap-1 overflow-x-auto rounded-none border-b px-2.5">
         <TabsTrigger value="changes" className="flex-none">
           What changed {panelChanges.length > 0 && <span className="tabular-nums text-muted-foreground">{panelChanges.length}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="score" className="flex-none">
+          Score {scores && <span className={cn("tabular-nums", scoreTone(scores.current.total))}>{scores.current.total}</span>}
         </TabsTrigger>
         <TabsTrigger value="comments" className="flex-none">
           Comments {comments > 0 && <span className="tabular-nums text-muted-foreground">{comments}</span>}
@@ -426,6 +480,15 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           </div>
         )}
       </TabsContent>
+      <TabsContent value="score" className="min-h-0 flex-1">
+        {canScore ? (
+          <ScorePanel scores={scores} busy={scoring} onShow={(i) => i.find && void showScoreItem(i.find)} />
+        ) : (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            {job.proofread ? "Open the latest bot version from Versions to see its score." : "Proofread the document to see its score out of 100."}
+          </p>
+        )}
+      </TabsContent>
       <TabsContent value="comments" className="min-h-0 flex-1 space-y-2 px-4 py-4 text-sm text-muted-foreground">
         <p>Select text in the document, then use the comment button in the toolbar (or right-click) to add a Word comment.</p>
         <p>Comments are saved in the file as comments by {authorName}, so students see them in Word. Reply and resolve from the comment bubble.</p>
@@ -460,6 +523,21 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           </p>
         </div>
         <StatusChip status={job.status} className="hidden md:inline-flex" />
+        {scores && canScore && (
+          <button
+            type="button"
+            onClick={() => {
+              setTab("score");
+              if (phone || window.innerWidth < 1024) setSheetOpen(true);
+            }}
+            title="Score out of 100: original → now"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2 text-xs tabular-nums hover:bg-secondary"
+          >
+            <span className="text-muted-foreground">Score</span>
+            <span className="text-muted-foreground">{scores.original.total} →</span>
+            <span className={cn("font-serif text-base leading-none font-semibold", scoreTone(scores.current.total))}>{scores.current.total}</span>
+          </button>
+        )}
 
         <div className="order-last flex w-full items-center rounded-md border bg-background p-0.5 sm:order-none sm:w-auto" role="radiogroup" aria-label="Editing mode">
           {MODES.map((m) => (

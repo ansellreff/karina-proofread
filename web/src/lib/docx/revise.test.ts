@@ -26,6 +26,20 @@ function rejected(doc: Document) {
   return texts(d);
 }
 
+describe("rejecting selected revisions (live score)", () => {
+  it("rejects only the given w:ids and leaves the rest tracked", () => {
+    const doc = parseXml(docXml(para(run("Name : Sinta.  Thesis : AI."))));
+    const p = bodyParagraphs(doc)[0].el;
+    const r = new Reviser(doc, ID, NOW);
+    const later = r.capture(() => r.replace(p, 21, 23, ":"));
+    r.capture(() => r.replace(p, 4, 6, ":"));
+    const d = roundTrip(doc);
+    rejectAllRevisions(d, new Set(later)); // "Thesis :" fix still open -> as written
+    acceptAllRevisions(d);
+    expect(texts(d)).toEqual(["Name: Sinta.  Thesis : AI."]);
+  });
+});
+
 describe("Reviser text edits", () => {
   it("replaces text inside a single run", () => {
     const doc = parseXml(docXml(para(run("I want to actually applying the strategies."))));
