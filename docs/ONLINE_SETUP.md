@@ -33,14 +33,15 @@ first time, Windows opens a GitHub sign-in in your browser: approve it there.
    |---|---|
    | `ANTHROPIC_API_KEY` | your Anthropic key (the same as in `web\.env.local` on this computer) |
    | `APP_PASSWORD_HASH` | made in step 5 below |
-   | `AUTH_SECRET` | a long random string; I'll give you one |
+   | `AUTH_SECRET` | made in step 5 below |
 
 5. **Your password.** In VS Code, open a terminal in the project and run:
    ```
    . .\dev.ps1; cd web; npx tsx scripts/password-hash.ts
    ```
-   Type your new password twice (the typing is hidden). Copy the long line it prints after `APP_PASSWORD_HASH=`
-   into Vercel. The password itself is never saved anywhere; only this scrambled version is.
+   Type your new password twice (the typing is hidden). It prints two lines, `APP_PASSWORD_HASH=…` and
+   `AUTH_SECRET=…`. Add each one to Vercel: the name is the part before `=`, the value is everything after it.
+   The password itself is never saved anywhere; only its scrambled version is.
 6. **Deployments → Redeploy.** Vercel shows the app's address, for example `karina-proofread.vercel.app`.
 
 ## 3. Your documents online

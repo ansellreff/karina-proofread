@@ -1,9 +1,10 @@
 /**
- * Make APP_PASSWORD_HASH for the online app. Type the password when asked (it is not shown, not saved anywhere);
- * paste the printed hash into Vercel → Settings → Environment Variables → APP_PASSWORD_HASH.
+ * Make APP_PASSWORD_HASH (and a fresh AUTH_SECRET) for the online app. Type the password when asked (it is not
+ * shown, not saved anywhere); paste both printed values into Vercel → Settings → Environment Variables.
  *
  *   npx tsx scripts/password-hash.ts
  */
+import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import { hashPassword } from "../src/lib/auth/password";
@@ -38,8 +39,9 @@ async function main() {
     console.error("The two passwords are different. Nothing was made.");
     process.exit(1);
   }
-  console.log(`\nAPP_PASSWORD_HASH=${await hashPassword(pw)}\n`);
-  console.log("Copy the part after = into Vercel → Settings → Environment Variables → APP_PASSWORD_HASH.");
+  console.log(`\nAPP_PASSWORD_HASH=${await hashPassword(pw)}`);
+  console.log(`AUTH_SECRET=${randomBytes(32).toString("base64url")}\n`);
+  console.log("In Vercel → Settings → Environment Variables, add both: the name before = and the part after = as the value.");
 }
 
 main();
