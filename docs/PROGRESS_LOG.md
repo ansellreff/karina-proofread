@@ -507,3 +507,18 @@ While cleaning up after a crashed test, I deleted every document in the local ap
 
   The test removes everything it created (its documents, learned records and rule) by id; your 5 documents and rules were untouched.
 - 61 unit tests (14 new), lint, type check and the production build pass.
+
+### Follow-up (Karina’s go-ahead)
+- **Your 32 older reviews are now loaded** in the app (Review rules → From your reviews). Each can be removed with Forget.
+- **AI test with the 15 suggested examples.** Two fresh AI runs on the 6 test documents, same rules, without and then with the examples. Cost US$1.22 in total (US$0.59 + US$0.63).
+
+  | | Your edits found (recall) | Bot edits you also made (precision) | Same wording |
+  |---|---|---|---|
+  | AI, no examples | 59% | 55% | 18 of 129 |
+  | AI + 15 examples | 64% | 53% | 21 of 129 |
+
+  - **Word fixes are where it moved:** the bot found 43% of your fixes, against 36% without examples. Your inline notes went from 1 to 2 of 5.
+  - **Caution:** this is one run each on 6 documents. 5 points is about 6 of your 129 edits, and the AI doesn’t answer exactly the same way twice, so this is a small gain within the noise, not a proven one. It doesn’t make the bot worse.
+  - **Cost:** the examples add about 1,060 tokens, cached, so less than one US cent per document.
+  - **Not approved for you:** each example is your own edit, and you decide which ones the AI should copy. Approve the ones that really are your style.
+- For tests only: `KP_LEARN_DIR` points the AI prompt at another learning folder (never set in the app).

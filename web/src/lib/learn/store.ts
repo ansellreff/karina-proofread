@@ -77,6 +77,7 @@ export class LearnStore {
 
 let store: LearnStore | null = null;
 export function getLearnStore(): LearnStore {
-  store ??= new LearnStore();
+  // KP_LEARN_DIR: another learning folder (accuracy tests with or without AI examples; never set in the app)
+  store ??= new LearnStore(process.env.KP_LEARN_DIR || undefined);
   return store;
 }
