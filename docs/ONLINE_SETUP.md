@@ -3,13 +3,17 @@
 The app runs on **Vercel** (free Hobby plan), with your documents in a private **Neon** database connected
 through Vercel. You open it from any PC or phone. You upload and download documents by hand, as before.
 
-**There is no password (your choice).** Anyone who has the app's address can open it, see the documents and run
-AI proofreads on your Anthropic credit. So:
-- keep the address to yourself;
-- keep a monthly spend limit on your Anthropic workspace.
+**The app itself has no password (your choice).** Anyone who has the app's address can open it and see the
+documents, so keep the address to yourself. The password sign-in that was built is saved in the project history
+(commit `c272e1c`). Ask Claude to bring it back any time.
 
-The password sign-in that was built is saved in the project history (commit `c272e1c`). Ask Claude to bring it
-back any time.
+**The AI has its own password**, because AI runs are paid with your Anthropic key. "Proofread with AI" and
+"Re-check selection" ask for it once per device. With "Remember on this device" ticked, it lasts 30 days.
+- **The password** is in `web/src/lib/ai/ai-password.ts` (now `991009`). To change it, edit the text between the
+  quotes, save, and run `push.bat`. Every device then needs the new one.
+- **Wrong tries:** after 5 wrong tries in 15 minutes from one connection, it waits 15 minutes.
+- **Settings → AI password** shows whether this device is unlocked, and can lock it again.
+- **As a backstop**, keep a monthly spend limit on your Anthropic workspace.
 
 **Never paste an API key or database address into the chat.**
 
@@ -23,7 +27,9 @@ The code is at https://github.com/ansellreff/karina-proofread (private).
 2. **Storage → Create Database → Neon**, region **Singapore**, connected to the project. This adds `DATABASE_URL`
    by itself.
 3. **Settings → Environment Variables:**
-   - `ANTHROPIC_API_KEY`: your Anthropic key, the same as in `web\.env.local` on this computer.
+   - `ANTHROPIC_API_KEY`: your Anthropic key, the same as in `web\.env.local` on this computer. Tick
+     **Production** (and Preview), and switch on **Sensitive** if offered, so it can't be read back even in Vercel.
+     Without it, the app says there is no API key and only rules-only proofreading works.
    - `APP_PASSWORD_HASH` and `AUTH_SECRET`: if you added them earlier, delete both. The app no longer uses them.
 4. **Deployments → Redeploy.**
 

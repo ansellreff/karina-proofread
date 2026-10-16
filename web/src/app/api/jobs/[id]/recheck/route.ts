@@ -1,3 +1,5 @@
+import { aiLockedResponse, aiUnlockedUntil } from "@/lib/ai/lock-request";
+import { NO_KEY } from "@/lib/ai/messages";
 import { systemPrompt } from "@/lib/ai/prompt";
 import { recheckPassage } from "@/lib/pipeline";
 import { stores } from "@/lib/storage/stores";
@@ -12,7 +14,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const id = (await ctx.params).id;
   const job = await store.get(id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
-  if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: "Re-checking needs the AI, and no Anthropic API key is set (ANTHROPIC_API_KEY)." }, { status: 400 });
+  if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: NO_KEY }, { status: 400 });
+  if (!(await aiUnlockedUntil())) return aiLockedResponse();
   const { text } = (await request.json()) as { text?: string };
   const passage = (text ?? "").trim();
   if (passage.split(/\s+/).length < 3) return Response.json({ error: "Select at least a sentence to re-check." }, { status: 400 });

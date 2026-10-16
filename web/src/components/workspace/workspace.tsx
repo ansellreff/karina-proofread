@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
+import { AiUnlockDialog } from "@/components/ai-unlock";
 import { toastDone, type Learned } from "@/components/done-toast";
 import { RenameDialog } from "@/components/documents-list";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
@@ -442,13 +443,16 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   decisions.forEach((d, index) => d.keys.forEach((k) => undoable.set(k, { decision: d.decision, index, later: decisions.length - 1 - index })));
 
   const [rechecking, setRechecking] = useState(false);
-  async function recheckSelection() {
-    const text = await selectedText(sd.current);
+  /** The passage waiting while the AI password is asked (Re-check selection continues after unlocking). */
+  const [unlockFor, setUnlockFor] = useState<string | null>(null);
+  async function recheckSelection(passage?: string) {
+    const text = passage ?? (await selectedText(sd.current));
     if (!text) return toast("Select a sentence or paragraph in the document first, then re-check it.");
     setRechecking(true);
     try {
       const res = await fetch(`/api/jobs/${job.id}/recheck`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-      const body = (await res.json()) as { edits?: { find: string; replace: string }[]; costUsd?: number; error?: string };
+      const body = (await res.json()) as { edits?: { find: string; replace: string }[]; costUsd?: number; error?: string; aiLocked?: boolean };
+      if (res.status === 403 && body.aiLocked) return setUnlockFor(text);
       if (!res.ok) throw new Error(body.error ?? "Re-check failed.");
       let applied = 0;
       for (const e of body.edits ?? []) if (await trackedReplace(sd.current, e.find, e.replace)) applied++;
@@ -790,13 +794,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         </div>
         {hasApiKey && hasBotVersion && mode !== "viewing" && (
           <Tip label="Select text in the document, then ask the AI to look at just that passage again">
-            <Button size="sm" variant="outline" onClick={recheckSelection} disabled={rechecking}>
+            <Button size="sm" variant="outline" onClick={() => void recheckSelection()} disabled={rechecking}>
               {rechecking ? <Loader2 className="animate-spin" /> : <ScanText />}
               <span className="hidden xl:inline">{rechecking ? "Re-checking" : "Re-check selection"}</span>
             </Button>
           </Tip>
         )}
-        <Button size="sm" variant={hasBotVersion ? "outline" : "default"} onClick={() => setProofreadOpen(true)}>
+        <Button size="sm" variant={hasBotVersion ? "outline" : "default"} onClick={() => setProofreadOpen(true)} aria-label={hasBotVersion ? "Proofread again" : "Proofread"}>
           <Sparkles /> <span className="hidden sm:inline">{hasBotVersion ? "Proofread again" : "Proofread"}</span>
         </Button>
         <DropdownMenu>
@@ -983,6 +987,15 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       <RenameDialog job={renameOpen ? job : null} onClose={() => setRenameOpen(false)} onSaved={(name) => setJob((j) => ({ ...j, studentName: name }))} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
+      <AiUnlockDialog
+        open={unlockFor !== null}
+        onOpenChange={(o) => !o && setUnlockFor(null)}
+        onUnlocked={() => {
+          const text = unlockFor;
+          setUnlockFor(null);
+          if (text) void recheckSelection(text);
+        }}
+      />
       <ProofreadDialog
         job={job}
         open={proofreadOpen}

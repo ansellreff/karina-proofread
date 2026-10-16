@@ -76,7 +76,8 @@ const BULLET = /^\s*(?:[•●▪◦■□➢►\-–*]|\(?\d{1,2}[.)]|\(?[a-z][
 
 async function extract(data: Uint8Array) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(data), useSystemFonts: false, disableFontFace: true, verbosity: 0 }).promise;
+  const task = pdfjs.getDocument({ data: new Uint8Array(data), useSystemFonts: false, disableFontFace: true, verbosity: 0 });
+  const doc = await task.promise;
   const lines: Line[] = [];
   const pageSizes: { width: number; height: number }[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
@@ -136,7 +137,7 @@ async function extract(data: Uint8Array) {
     if (cur) lines.push(cur);
     page.cleanup();
   }
-  await doc.destroy();
+  await task.destroy(); // pdf.js 6: the loading task closes the document
   return { lines: lines.filter((l) => lineText(l).trim()), pageSizes, pages: pageSizes.length };
 }
 

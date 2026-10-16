@@ -1,3 +1,5 @@
+import { aiLockedResponse, aiUnlockedUntil } from "@/lib/ai/lock-request";
+import { NO_KEY } from "@/lib/ai/messages";
 import { systemPrompt } from "@/lib/ai/prompt";
 import { KARINA } from "@/lib/identity";
 import { proofreadDocx } from "@/lib/pipeline";
@@ -19,7 +21,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
   const { ai } = (await request.json().catch(() => ({}))) as { ai?: boolean };
   const settings = await store.getSettings();
-  if (ai && !process.env.ANTHROPIC_API_KEY) return Response.json({ error: "No Anthropic API key is set (ANTHROPIC_API_KEY)." }, { status: 400 });
+  if (ai && !process.env.ANTHROPIC_API_KEY) return Response.json({ error: NO_KEY }, { status: 400 });
+  if (ai && !(await aiUnlockedUntil())) return aiLockedResponse();
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

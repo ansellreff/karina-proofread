@@ -3,6 +3,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { AiLockSection } from "@/components/ai-unlock";
 import { Segmented } from "@/components/rules/bits";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
@@ -102,7 +103,7 @@ export function SettingsForm() {
         <Field label="Use AI by default" hint="You can still switch it per document.">
           <div className="flex items-center gap-3">
             <Switch checked={s.aiDefault} onCheckedChange={(v) => setS({ ...s, aiDefault: v })} disabled={!info.hasApiKey} />
-            <span className="text-sm text-muted-foreground">{info.hasApiKey ? (s.aiDefault ? "On" : "Off") : "No API key in web/.env.local"}</span>
+            <span className="text-sm text-muted-foreground">{info.hasApiKey ? (s.aiDefault ? "On" : "Off") : "No Anthropic API key is set"}</span>
           </div>
         </Field>
         <Field label="AI model" hint="Opus is closest to your style. Sonnet costs about half.">
@@ -127,6 +128,7 @@ export function SettingsForm() {
           <Input value={s.authorName} onChange={(e) => setS({ ...s, authorName: e.target.value })} className="max-w-xs" />
         </Field>
       </section>
+      <AiLockSection />
 
       <section className="space-y-5 rounded-lg border bg-card p-5">
         <h2 className="text-lg font-semibold">AI cost</h2>

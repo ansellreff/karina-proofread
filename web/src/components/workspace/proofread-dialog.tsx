@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { AiUnlockCard, fetchAiStatus, type AiStatus } from "@/components/ai-unlock";
 import type { Job } from "@/lib/store/types";
 
 interface Estimate {
@@ -46,11 +47,25 @@ export function ProofreadDialog({
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const running = stage !== null;
-  const estimating = open && ai && !estimate;
+  const locked = ai && aiStatus !== null && !aiStatus.unlocked;
+  const estimating = open && ai && !!aiStatus?.unlocked && !estimate;
+
+  // is the AI unlocked on this device? (asked each time the dialog opens)
+  useEffect(() => {
+    if (!open || !hasApiKey) return;
+    let cancelled = false;
+    fetchAiStatus()
+      .then((s) => !cancelled && setAiStatus(s))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, hasApiKey]);
 
   useEffect(() => {
-    if (!open || !ai || estimate) return;
+    if (!open || !ai || estimate || !aiStatus?.unlocked) return;
     let cancelled = false;
     fetch(`/api/jobs/${job.id}/estimate`, { method: "POST" })
       .then((r) => r.json())
@@ -59,7 +74,7 @@ export function ProofreadDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, ai, estimate, job.id]);
+  }, [open, ai, estimate, job.id, aiStatus]);
 
   async function run() {
     setError(null);
@@ -70,7 +85,13 @@ export function ProofreadDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ai }),
       });
-      if (!res.body) throw new Error((await res.json()).error ?? "Proofreading failed.");
+      if (res.status === 403) {
+        // the unlock ran out (or the password was changed): ask again
+        setStage(null);
+        setAiStatus({ hasKey: true, unlocked: false, until: null });
+        return;
+      }
+      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error ?? "Proofreading failed.");
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
@@ -128,14 +149,17 @@ export function ProofreadDialog({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {hasApiKey
                     ? "Adds your kind of notes, fixes and cuts. Off: rules only (formatting, header, note block), free."
-                    : "Add an Anthropic API key in web/.env.local to use AI. Rules-only proofreading still works."}
+                    : "The AI needs an Anthropic API key (online: Vercel → Settings → Environment Variables → ANTHROPIC_API_KEY, then Redeploy). Rules-only proofreading still works."}
                 </p>
               </div>
               <Switch id="ai-switch" checked={ai} onCheckedChange={setAi} disabled={!hasApiKey} />
             </div>
 
-            {ai && (
+            {locked && <AiUnlockCard onUnlocked={setAiStatus} />}
+
+            {ai && !locked && (
               <div className="rounded-md bg-muted px-3 py-3 text-sm">
+                {aiStatus === null && <p className="text-muted-foreground">Checking the AI…</p>}
                 {estimating && <p className="text-muted-foreground">Counting tokens…</p>}
                 {estimate?.error && <p className="text-destructive">{estimate.error}</p>}
                 {estimate && !estimate.error && (
@@ -160,8 +184,8 @@ export function ProofreadDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={running}>
             Cancel
           </Button>
-          <Button onClick={run} disabled={running}>
-            {running ? "Proofreading…" : ai ? "Proofread with AI" : "Proofread with rules"}
+          <Button onClick={run} disabled={running || locked || (ai && aiStatus === null)}>
+            {running ? "Proofreading…" : locked ? "Unlock the AI first" : ai ? "Proofread with AI" : "Proofread with rules"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -42,6 +42,16 @@ Private web app that proofreads student enrollment documents (study plans, autob
   - **No sign-in** (Karina's decision, 2026-10-17): the app is public to anyone with the address. The password sign-in, with in-app change and Vercel reset, is in git history at `c272e1c`. Microsoft sign-in and OneDrive are at `6bda307` (Azure wasn't available to her).
 - **Getting the stores:** pages and routes get them with `await stores()` (`lib/storage/stores.ts`). The command-line scripts use `localStores()` (`lib/storage/local.ts`). Never read or write `.data` or `prompts` directly: go through `AppFiles` (`lib/storage/files.ts`: local `FsFiles`, `PgFiles` in `pg-files.ts`).
 - **`/api/version`:** reports the deployed commit and whether the database is connected.
+- **AI password** (`lib/ai/ai-password.ts`, plain text that Karina edits; server only):
+  - estimate, AI proofread and re-check refuse with 403 `{aiLocked}` until `/api/ai` (POST) sets the `kp_ai` cookie, an HMAC keyed by the password, so changing the password re-locks every device;
+  - after 5 wrong tries in 15 minutes from one address, it waits (`ai/failures.json`);
+  - UI: `components/ai-unlock.tsx`, used by the proofread dialog, the re-check dialog and Settings;
+  - after any build, check that the password is absent from `.next/static`.
+- **Security checks:**
+  - the key is only in `.env.local` and Vercel, never in git, the build or responses;
+  - `npm audit --omit=dev` must stay at 0;
+  - `pdfjs-dist` is pinned to ≥6.2.108 for the PDF code-execution fix, with an override so SuperDoc uses the same copy;
+  - `shadcn` is a dev dependency.
 - **Trying online mode on this PC:**
   1. `DATABASE_URL=pglite:<folder>` (PGlite, a dev dependency).
   2. `next build`, then `next start -p 3100` with `__NEXT_PROCESSED_ENV=true`, so `.env.local` is ignored.

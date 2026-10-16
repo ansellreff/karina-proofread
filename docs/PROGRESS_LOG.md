@@ -689,3 +689,48 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - 74 unit tests, lint, type check and build pass.
 - Online mode against Postgres on this computer: **8/8**. The database is connected; upload, proofread, save, export, every page and the rules all work.
 - Local app: **58/58**. Her 5 documents, rules and 32 learned reviews were untouched.
+
+## Security check, and an AI password (2026-10-17)
+
+### Is the Claude API key safe?
+- **Never in git:** it is only in `web\.env.local` (ignored by git, never committed) and in Vercel's settings. All commits were checked: the key appears in none.
+- **Never sent to the browser:** the app's browser code only ever learns *whether* a key is set (yes/no). The built app was searched for the key: it is in 0 files that go to browsers.
+- **Never shown:** it isn't written in logs or error messages; the server only uses it to call Claude.
+- **The real risk was use, not leak:** with the app public, anyone with the address could have run AI proofreads on her key. That is what the new AI password stops.
+- **Advice:** in Vercel, mark `ANTHROPIC_API_KEY` as **Sensitive**, and keep a monthly spend limit on the Anthropic workspace.
+
+### Other findings, fixed
+- **The PDF reader** (pdf.js) had a known flaw: a malicious PDF could run code. The app reads uploaded PDFs and is public, so this mattered.
+  - Upgraded to the fixed version (6.3.289), also inside the Word editor (SuperDoc), which carried its own older copy.
+  - The PDF converter needed a one-line change for the new version. Both sample PDFs still convert (1 page → 9 paragraphs, 3 pages → 25).
+- **A design tool used only while building the app** (shadcn) brought 7 more flagged packages. It moved to the build-only tools, so none of them ship with the app.
+- **Result:** the dependency audit of what the app runs on is at **0 known vulnerabilities**.
+- **Accessibility:** on the phone, the Proofread button showed only an icon and had no name for screen readers. It has one now.
+
+### Still true (Karina's choices)
+- The app has no sign-in: anyone with the address can see and change documents. The password sign-in is kept at `c272e1c`.
+- The AI password is a short number. It stops casual use, together with the wait after 5 wrong tries; the spend limit is the safety net.
+
+### AI password
+**Request:** using the AI needs a simple password that she can change in one file; to begin with, `991009`. It should be easy to use.
+
+- **Where it's set:** `web/src/lib/ai/ai-password.ts`, one clearly marked line. To change it: edit, save, run `push.bat`. Every device unlocked with the old password must enter the new one.
+- **The password stays on the server:** it is in 0 files sent to browsers (checked after building). A device that unlocks gets a signed cookie, not the password.
+- **Proofread dialog:** with "Use AI" on and the AI locked, a card says *"The AI is locked: enter the AI password to use it; rules-only proofreading works without it."*
+  - It has one password field with show/hide, **Remember on this device for 30 days** (on by default; otherwise until the browser closes), and **Unlock**.
+  - While locked, the button reads **Unlock the AI first**. After unlocking, the cost estimate appears and the button becomes **Proofread with AI**.
+- **Wrong password:** the field clears and says *"That password isn't right. 4 tries left."* After 5 wrong tries in 15 minutes from one connection: *"Try again in 15 minutes."*
+- **Re-check selection:** if locked, a small unlock dialog opens, and the re-check continues by itself after unlocking.
+- **Settings → AI password:** *"AI unlocked on this device until …"* with **Lock AI on this device**, or the unlock card. It also says where to change the password.
+- **On the server:** the cost estimate, AI proofread and re-check all refuse until the device is unlocked, so the lock can't be skipped by calling the app directly.
+- **When there's no key online,** the message now says where to add it (Vercel → Environment Variables → `ANTHROPIC_API_KEY` → Redeploy) instead of pointing to `web/.env.local`.
+
+### Verified
+- 77 unit tests (3 new for the lock), lint, type check and build pass.
+- In the browser, on desktop and phone:
+  - the lock card appears and the AI can't run until unlocked;
+  - a wrong password says how many tries are left;
+  - the right one unlocks and shows the cost estimate;
+  - Settings shows the unlock and can lock again.
+- The AI routes refuse without unlocking (403).
+- Full end-to-end test: **59/59** (new check: AI re-check and estimate refuse until unlocked; a wrong password is refused).

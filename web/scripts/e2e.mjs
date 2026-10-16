@@ -644,6 +644,19 @@ if (pdfSample) {
   }
 }
 
+// AI password: AI routes refuse until this device unlocks the AI (a fresh request has no unlock cookie)
+{
+  const locked = await fetch(`${base}/api/jobs/${job.id}/recheck`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "This sentence would be re-checked." }) });
+  const lockedEst = await fetch(`${base}/api/jobs/${job.id}/estimate`, { method: "POST" });
+  const wrong = await fetch(`${base}/api/ai`, { method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": "192.0.2.50" }, body: JSON.stringify({ password: "not it" }) });
+  const status = await (await fetch(`${base}/api/ai`)).json();
+  check(
+    "AI password: AI re-check and estimate refuse until unlocked; a wrong password is refused",
+    [400, 403].includes(locked.status) && [400, 403].includes(lockedEst.status) && (status.hasKey ? locked.status === 403 && wrong.status === 401 : true) && status.unlocked === false,
+    `recheck ${locked.status}, estimate ${lockedEst.status}, wrong password ${wrong.status}, key ${status.hasKey}`,
+  );
+}
+
 check("no requests leave the app (privacy)", !blocked.some((b) => b.startsWith("EXTERNAL")), blocked.filter((b) => b.startsWith("EXTERNAL")).slice(0, 3).join("; "));
 console.log(`\nconsole errors (${consoleErrors.length}):`, consoleErrors.slice(0, 8));
 await browser.close();
