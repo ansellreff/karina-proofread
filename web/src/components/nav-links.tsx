@@ -13,7 +13,6 @@ const LINKS = [
 
 export function NavLinks() {
   const path = usePathname();
-  if (path === "/login") return null;
   return (
     <nav className="flex items-center gap-1 text-sm">
       {LINKS.map((l) => {

@@ -1,6 +1,6 @@
 # Karina Proofread Bot — Project Plan
 
-_Last updated: 2026-10-17 (M4 re-planned without Microsoft/OneDrive: Vercel + password + Neon; built and tested; waiting for Karina's GitHub/Vercel steps)_
+_Last updated: 2026-10-17 (M4: Vercel + Neon, no sign-in at Karina's request; code on GitHub; waiting for the Vercel/Neon setup)_
 
 ## What we are building
 
@@ -37,7 +37,7 @@ Every rule is checked against Karina's real edits on 6 test documents that the b
 | Spelling | British spellings are kept ("programme", "behaviour"), because Karina doesn't change them |
 | Review editor | SuperDoc (works directly on the Word file), with "Open in Word for the web" as a fallback |
 | PDF | Browser print view (clean or with markup) |
-| Storage / sign-in | **Online:** Neon Postgres connected through Vercel (region Singapore), holding the documents, versions, rules, learning and usage, with Karina's password as the sign-in. **No OneDrive or Microsoft sign-in:** Microsoft refused her free Azure account, and Azure was required for that. She uploads and downloads files by hand. **Locally,** the app still runs on this PC without sign-in |
+| Storage / sign-in | **Online:** Neon Postgres connected through Vercel (region Singapore), holding the documents, versions, rules, learning and usage, **no sign-in** (Karina's choice: the address is the only protection; the password sign-in is kept in history, commit c272e1c). **No OneDrive or Microsoft sign-in:** Microsoft refused her free Azure account, and Azure was required for that. She uploads and downloads files by hand. **Locally,** the app still runs on this PC without sign-in |
 | Deploy | Private GitHub repository → Vercel. Before the first push, the whole git history is scanned for student names and keys. Afterwards, every push (only with her OK) redeploys |
 | Hosting | Vercel Hobby (free: personal, unpaid use, as Karina confirmed). Functions run in Singapore |
 | Rules | Karina's rules live in `web/prompts/karina-rules.json`, edited on the Review rules page; engine, AI and score all read it |
@@ -59,7 +59,7 @@ Each milestone ends with a review by Karina before the next one starts.
 | M3+ | Local improvements: jump to change, undo, **Review rules page**, **compare with original**, **score out of 100**, resizable/collapsible panel, drag-and-drop side-by-side, **PDF input** | ✅ Done (2026-10-16): 43/43 browser checks, waiting for Karina's review |
 | M3++ | UI/UX round: **dark mode** (white or dark paper), documents search/filter/rename/delete+restore, review shortcuts, save status, view menu, tips, app icon | ✅ Done (2026-10-16): 52/52 browser checks, waiting for Karina's review |
 | M3+++ | **Learning loop** (local): every finished document teaches the bot; proposals (new rules, rules to switch off, AI examples) wait for Karina's approval on Review rules → From your reviews | ✅ Done (2026-10-16): 57/57 browser checks, waiting for Karina's review |
-| M4 | **Online on Vercel:** password sign-in, Neon database, AI costs page, phone install (re-planned 2026-10-17 without OneDrive) | 🔄 Built and tested locally (online mode against Postgres: 15/15; local: 58/58). Next: Karina's GitHub and Vercel steps ([ONLINE_SETUP.md](ONLINE_SETUP.md)), then push, deploy and copy her data |
+| M4 | **Online on Vercel:** Neon database, AI costs page, phone install, `push.bat` with safety check and Vercel reminder (re-planned 2026-10-17 without OneDrive) | 🔄 Built and tested locally (online mode against Postgres: 15/15; local: 58/58). Next: Karina's GitHub and Vercel steps ([ONLINE_SETUP.md](ONLINE_SETUP.md)), then push, deploy and copy her data |
 | M5 | Email intake (open: OneDrive is out; to be re-thought if still wanted) | ⏳ |
 
 ### M2 — Claude layer
@@ -85,7 +85,7 @@ Each milestone ends with a review by Karina before the next one starts.
 - Style rulebook page (view and edit the rules) and a Settings page.
 
 ### M4 — Online
-- The app on Vercel, opened from any PC or phone, behind Karina's password.
+- The app on Vercel, opened from any PC or phone. No sign-in (Karina's decision); the password sign-in stays in git history (`c272e1c`).
 - Documents, versions, rules, learning and usage in a Neon database (Singapore).
 - Upload and download by hand. PDF through the print view.
 - Install on the phone (Add to Home screen). AI costs page.
@@ -101,4 +101,4 @@ Each milestone ends with a review by Karina before the next one starts.
 | Item | Milestone |
 |---|---|
 | Anthropic API key (with spend limit) | M2 |
-| GitHub private repository, Vercel account (Hobby) with a Neon database, her app password | M4 |
+| GitHub private repository, Vercel account (Hobby) with a Neon database | M4 |

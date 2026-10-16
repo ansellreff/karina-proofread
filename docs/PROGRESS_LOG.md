@@ -645,3 +645,47 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - Karina creates the GitHub repository (name `karina-proofread`) and sends its address.
 - I scan the whole history for student names and keys, then push.
 - She sets up Vercel and Neon and makes her password (guide, part 2), then I copy her data online.
+
+## Code on GitHub; password removed; push.bat (2026-10-17)
+
+### GitHub
+- **Where:** the project is on Karina's private repository https://github.com/ansellreff/karina-proofread.
+- **Before the first push**, all 18 commits were checked:
+  - no student names: the names in the document folders' file names and the 17 names the app had detected inside the documents;
+  - no keys, passwords or database addresses;
+  - no student documents or app data.
+
+### The online app showed only "Internal Server Error"
+- **Diagnosis:** the address answered, but every page returned error 500, while the static app icon loaded.
+- **Most likely cause:** the app refusing to start because a Vercel setting it needed was missing or not yet applied. The usual reasons are no Redeploy after adding a setting, or a setting not added for Production.
+- **Why it wasn't visible:** the error message was hidden.
+- **Fix:** the app now shows a page naming what's missing, instead of a bare 500. A new address, `/api/version`, reports which version is running and whether the database is connected.
+
+### Password: built, then removed at Karina's request
+- **What was built** (saved in history as commit **`c272e1c`**, to bring back any time):
+  - sign-in with one password;
+  - **Settings → Change password**, which signs other devices out;
+  - a **forgotten password** reset by putting a new hash in Vercel and redeploying;
+  - a 15-minute lock after 5 wrong tries.
+- **Karina decided she doesn't need it,** so it was removed. The online app is now open to anyone with its address. The risks were explained:
+  - students' documents can be seen;
+  - AI runs can use her Anthropic credit;
+  - rules and documents can be changed.
+- **What protects it now:** keeping the address private and the Anthropic spend limit.
+- **A finding while testing:** she had pasted `APP_PASSWORD_HASH` and `AUTH_SECRET` into `web\.env.local` as well. They aren't used any more, and both can be deleted there and in Vercel.
+
+### `push.bat`: send updates, with a safety check and a Vercel reminder
+- Double-click `push.bat` in the project folder.
+- It shows the changes and asks for a short description.
+- It runs a **safety check** first, `web/scripts/prepush-check.mjs`. It stops the push if anything not yet on GitHub contains:
+  - a student's name (taken from the document folders and the app's own data on this computer);
+  - a student document or the app's data folder;
+  - an API key or database address.
+  - Tested: it stopped on a real student name and on a fake key.
+- Then it commits (as Karina Octavia) and pushes.
+- **Vercel reminder** (`web/scripts/vercel-check.mjs`): after the push it waits up to 5 minutes for the online app to run the new version (through `/api/version`). If it doesn't, it prints a clear reminder: Vercel → Deployments → Redeploy, or what to look for if the deploy failed.
+
+### Verified
+- 74 unit tests, lint, type check and build pass.
+- Online mode against Postgres on this computer: **8/8**. The database is connected; upload, proofread, save, export, every page and the rules all work.
+- Local app: **58/58**. Her 5 documents, rules and 32 learned reviews were untouched.

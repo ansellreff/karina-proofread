@@ -1,12 +1,11 @@
 /**
  * The stores for the current request: the online database when DATABASE_URL is set, otherwise this computer
- * (web/.data, web/prompts). Online, a request without a signed-in session goes to the sign-in page.
- * Pages and route handlers only.
+ * (web/.data, web/prompts). Pages and route handlers only.
+ *
+ * There is no sign-in (Karina's choice, 2026-10-17): anyone with the online address can use the app. The password
+ * sign-in that was built is in git history (commit c272e1c) if it is ever wanted back.
  */
-import { redirect } from "next/navigation";
-import { authConfig, databaseUrl } from "../auth/config";
-import { currentSession } from "../auth/current";
-import { currentPasswordHash, fingerprint } from "../auth/password-store";
+import { databaseUrl } from "./config";
 import { localStores, storesOn, type Stores } from "./local";
 import { neonQuery, PgFiles, pgliteQuery, type Query } from "./pg-files";
 
@@ -26,22 +25,7 @@ async function cloudFiles(url: string): Promise<PgFiles> {
   return cached.files;
 }
 
-/** The files the app keeps, without the sign-in check (the sign-in route needs them before a session exists). */
-export async function dataStores(): Promise<Stores> {
+export async function stores(): Promise<Stores> {
   const url = databaseUrl();
   return url ? storesOn(await cloudFiles(url), "online") : localStores();
-}
-
-/**
- * This request's stores; without a valid session (when a password is set) to the sign-in page. A session opened
- * with an earlier password (changed in the app, or reset in Vercel) is no longer valid.
- */
-export async function stores(): Promise<Stores> {
-  const cfg = authConfig();
-  const st = await dataStores();
-  if (cfg) {
-    const session = await currentSession(cfg);
-    if (!session || session.pw !== fingerprint(await currentPasswordHash(st.data, cfg))) redirect("/login");
-  }
-  return st;
 }

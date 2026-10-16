@@ -37,15 +37,22 @@ Private web app that proofreads student enrollment documents (study plans, autob
 
 ## Storage, sign-in, online (M4)
 - **Two modes:**
-  - **Local:** no `DATABASE_URL` or `APP_PASSWORD_HASH`. Files in `web/.data`, rules in `web/prompts`, no sign-in. This is what the tests and e2e use.
-  - **Online (Vercel):** files in Neon Postgres (`DATABASE_URL`, one `app_files` table), rules under `settings/` with the bundled `prompts/*` as defaults. Password sign-in (`APP_PASSWORD_HASH` from `scripts/password-hash.ts`, `AUTH_SECRET`). On Vercel, a missing setting refuses to run. Setup: `docs/ONLINE_SETUP.md`.
-  - There is no OneDrive or Microsoft sign-in: Azure wasn't available to Karina, and that attempt is in git history at `6bda307`.
-- **Getting the stores:** pages and routes get them with `await stores()` (`lib/storage/stores.ts`; `dataStores()` skips the sign-in check, for the login route only). The command-line scripts use `localStores()` (`lib/storage/local.ts`). Never read or write `.data` or `prompts` directly: go through `AppFiles` (`lib/storage/files.ts`: local `FsFiles`, `PgFiles` in `pg-files.ts`).
-- **Errors in routes:** call `stores()` outside `try`. Online it redirects to sign-in, and that redirect must not be caught.
-- **Proxy:** `src/proxy.ts` guards pages only. API routes are excluded, so uploads aren't cut at 10 MB, and they check the session through `stores()`.
-- **Sign-in:** `lib/auth/*`. Scrypt hash, an encrypted 30-day cookie, and a 15-minute lock after 5 wrong tries from one address (`auth/failures.json`).
-- **Trying online mode on this PC:** `DATABASE_URL=pglite:<folder>` (PGlite, a dev dependency), then `next build` and `next start -p 3100` with a test `APP_PASSWORD_HASH`/`AUTH_SECRET`, then `E2E_PASSWORD=… node scripts/e2e-online.mjs <sample.docx> --base http://localhost:3100`.
+  - **Local:** no `DATABASE_URL`. Files in `web/.data`, rules in `web/prompts`. This is what the tests and e2e use.
+  - **Online (Vercel):** files in Neon Postgres (`DATABASE_URL`, one `app_files` table), rules under `settings/` with the bundled `prompts/*` as defaults. On Vercel, a missing `DATABASE_URL` shows a "setup isn't finished" page (`src/proxy.ts`). Setup: `docs/ONLINE_SETUP.md`.
+  - **No sign-in** (Karina's decision, 2026-10-17): the app is public to anyone with the address. The password sign-in, with in-app change and Vercel reset, is in git history at `c272e1c`. Microsoft sign-in and OneDrive are at `6bda307` (Azure wasn't available to her).
+- **Getting the stores:** pages and routes get them with `await stores()` (`lib/storage/stores.ts`). The command-line scripts use `localStores()` (`lib/storage/local.ts`). Never read or write `.data` or `prompts` directly: go through `AppFiles` (`lib/storage/files.ts`: local `FsFiles`, `PgFiles` in `pg-files.ts`).
+- **`/api/version`:** reports the deployed commit and whether the database is connected.
+- **Trying online mode on this PC:**
+  1. `DATABASE_URL=pglite:<folder>` (PGlite, a dev dependency).
+  2. `next build`, then `next start -p 3100` with `__NEXT_PROCESSED_ENV=true`, so `.env.local` is ignored.
+  3. `node scripts/e2e-online.mjs <sample.docx> --base http://localhost:3100`.
 - **Data copy:** `scripts/copy-to-online.ts` copies `.data` and the prompts to the online database once (with `DATABASE_URL` set in the shell only).
+- **Pushing:** `push.bat` (repo root):
+  1. `git add -A`.
+  2. `web/scripts/prepush-check.mjs`: blocks student names (from the document folders and `.data`), private files and keys in everything not yet on GitHub.
+  3. Commit as Karina Octavia, then push.
+  4. `web/scripts/vercel-check.mjs`: waits until `/api/version` reports the pushed commit, otherwise prints the Vercel redeploy reminder.
+  - Push only with Karina's OK. After any push, confirm Vercel updated.
 - **Build traces:** `next.config.ts` traces `prompts/*` and the pdf.js worker and fonts, and **excludes `.data` and backups**. After config changes, check that no `.nft.json` lists `.data`.
 - **Hold-out guard:** SHA-256 of the 6 test files in `lib/learn/holdout.ts`, with no names.
 

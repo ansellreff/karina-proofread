@@ -1,55 +1,32 @@
-import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { newSession, seal, SESSION_COOKIE } from "./lib/auth/session";
+import { isHoldout } from "./lib/learn/learn";
+import { ConfigError, databaseUrl } from "./lib/storage/config";
 import { proxy } from "./proxy";
-
-const SECRET = "s".repeat(40);
-const online = () => {
-  vi.stubEnv("APP_PASSWORD_HASH", "scrypt$1$1$1$a$b");
-  vi.stubEnv("AUTH_SECRET", SECRET);
-};
-
-async function request(path: string, signedIn = false, secret = SECRET) {
-  const headers = new Headers();
-  if (signedIn) headers.set("cookie", `${SESSION_COOKIE}=${await seal({ ...newSession("fp") }, secret, 3600)}`);
-  return new NextRequest(new URL(path, "http://localhost:3000"), { headers });
-}
-
-const location = (res: Response) => res.headers.get("location");
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe("proxy (pages only)", () => {
-  it("does nothing in local mode", async () => {
-    vi.stubEnv("APP_PASSWORD_HASH", "");
-    expect(location(await proxy(await request("/rules")))).toBeNull();
+describe("online settings", () => {
+  it("local without DATABASE_URL; online it must be set", () => {
+    expect(databaseUrl({})).toBeNull();
+    expect(databaseUrl({ DATABASE_URL: " postgres://x " })).toBe("postgres://x");
+    expect(() => databaseUrl({ VERCEL: "1" })).toThrow(ConfigError);
   });
 
-  it("sends a device that isn't signed in to sign-in, and keeps where it was going", async () => {
-    online();
-    expect(location(await proxy(await request("/jobs/abc?x=1")))).toBe("http://localhost:3000/login?next=%2Fjobs%2Fabc%3Fx%3D1");
-    expect(location(await proxy(await request("/login")))).toBeNull();
-    expect(location(await proxy(await request("/", true, "o".repeat(40))))).toContain("/login"); // a cookie from another secret
-  });
-
-  it("lets a signed-in device through", async () => {
-    online();
-    expect(location(await proxy(await request("/", true)))).toBeNull();
-  });
-
-  it("online with a setting missing: a page naming what's missing (no values), not an error", async () => {
-    vi.stubEnv("VERCEL", "1");
-    vi.stubEnv("APP_PASSWORD_HASH", "");
+  it("pages pass through when set up, and say what is missing online when not (no bare error 500)", async () => {
+    vi.stubEnv("VERCEL", "");
     vi.stubEnv("DATABASE_URL", "");
-    const res = await proxy(await request("/"));
-    const html = await res.text();
+    expect(proxy().headers.get("x-middleware-next")).toBe("1");
+    vi.stubEnv("VERCEL", "1");
+    const res = proxy();
     expect(res.status).toBe(503);
-    expect(html).toContain("APP_PASSWORD_HASH");
-    expect(html).toContain("DATABASE_URL");
-    online();
+    expect(await res.text()).toContain("DATABASE_URL");
     vi.stubEnv("DATABASE_URL", "postgres://x");
-    vi.stubEnv("AUTH_SECRET", "short");
-    const res2 = await proxy(await request("/"));
-    expect((await res2.text()).includes("AUTH_SECRET")).toBe(true);
+    expect(proxy().status).toBe(200);
+  });
+});
+
+describe("hold-out guard", () => {
+  it("knows the test documents by content, not name", () => {
+    expect(isHoldout(new TextEncoder().encode("any other file"))).toBe(false);
   });
 });
