@@ -66,6 +66,14 @@ async function newPage(viewport) {
     const u = new URL(r.url());
     if (!["localhost", "127.0.0.1"].includes(u.hostname) && !u.protocol.startsWith("data") && !u.protocol.startsWith("blob")) blocked.push(`EXTERNAL ${r.url()}`);
   });
+  // the dev server's own overlay (bottom-left bubble) is not part of the app and can sit over a pane's corner
+  await page.addInitScript(() => {
+    addEventListener("DOMContentLoaded", () => {
+      const s = document.createElement("style");
+      s.textContent = "nextjs-portal{display:none!important}";
+      document.head.appendChild(s);
+    });
+  });
   return page;
 }
 
@@ -272,6 +280,46 @@ await page.mouse.up();
 await page.waitForTimeout(600);
 const asideW = await page.locator("aside").first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
 check("review panel: can be hidden, shown again and resized", hidden && asideW > 450 && (await editorKept()), `panel ${asideW}px`);
+
+// 4c. zoom in each pane (Word-style), folded into a small icon until hovered: + / slider / Ctrl+wheel / fit width
+{
+  const zoomOf = () => page.evaluate(() => window.__superdoc.getZoomState());
+  const bar = page.locator('[data-zoom="review"]');
+  const openBar = async () => {
+    const b = await bar.boundingBox();
+    await page.mouse.move(b.x + b.width - 12, b.y + b.height / 2);
+    await bar.getByRole("button", { name: "Zoom in" }).waitFor({ timeout: 5000 });
+  };
+  const foldedSmall = (await bar.getByRole("slider").count()) === 0 && ((await bar.boundingBox())?.width ?? 999) < 48;
+  const z0 = await zoomOf();
+  await openBar();
+  await bar.getByRole("button", { name: "Zoom in" }).click();
+  await page.waitForTimeout(300);
+  const z1 = await zoomOf();
+  await bar.getByRole("slider", { name: "Zoom" }).fill("150");
+  await page.waitForTimeout(300);
+  const z2 = await zoomOf();
+  const rbox = await page.locator('[data-pane="review"]').boundingBox();
+  await page.mouse.move(rbox.x + rbox.width / 2, rbox.y + rbox.height / 2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await page.waitForTimeout(300);
+  const z3 = await zoomOf();
+  await page.waitForTimeout(900); // the mouse is over the page now: the bar folds away again
+  const foldsAgain = (await bar.getByRole("slider").count()) === 0;
+  const originalBar = await page.locator('[data-zoom="original"]').isVisible();
+  await openBar();
+  await bar.getByRole("button", { name: "Fit page width" }).click();
+  await page.waitForTimeout(300);
+  const z4 = await zoomOf();
+  check(
+    "zoom: a small icon until hovered; +, slider and Ctrl+wheel zoom the page; fit width goes back; each side has its own",
+    foldedSmall && foldsAgain && z1.value === Math.floor(z0.value / 10) * 10 + 10 && z2.value === 150 && z3.value === 160 && z4.mode === "fit-width" && originalBar && (await editorKept()),
+    `folded ${foldedSmall}/${foldsAgain}, ${z0.value} -> ${z1.value} -> ${z2.value} -> ${z3.value} -> ${z4.mode}`,
+  );
+  await page.mouse.move(rbox.x + rbox.width / 2, rbox.y + rbox.height / 2);
+}
 await page.getByRole("button", { name: /Side by side/ }).click();
 await page.waitForTimeout(500);
 check("comparing never reloads the review editor (unsaved edits are safe)", (await editorKept()) && (await page.locator('[data-pane="original"]').count()) === 0);

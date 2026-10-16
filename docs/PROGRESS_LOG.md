@@ -582,3 +582,20 @@ While cleaning up after a crashed test, I deleted every document in the local ap
 4. Later: GitHub and Vercel.
 
 Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on her phone).
+
+## Zoom in each document pane (2026-10-16)
+
+**Request:** pages are sometimes too small to read (especially side by side). She asked for a zoom slider like Word's in each panel. Then, while it was being built: it must not cover the document, so it should be a small icon that opens on hover.
+
+- **Where it is:** a small, faint magnifier icon in the bottom-right corner of each pane, outside the page. Hovering it (or tapping or tabbing to it) opens Word's zoom bar:
+  - **−** and **+**: move by 10%;
+  - a **slider**, from 20% to 200%;
+  - the **percentage** (click it to go back to 100%);
+  - **fit page width**.
+  - The bar folds away again when the mouse leaves.
+- **Ctrl + mouse wheel** over a page zooms too, as in Word.
+- **Each side keeps its own zoom** (review and original), remembered in this browser. A zoom she chose stays when the panes are resized; "fit page width" follows the column again.
+- **Phones:** the text already reflows to the screen there, so the control isn't shown.
+- **Checks:** a new end-to-end check covers the folded icon, +, slider, Ctrl+wheel, folding again and fit width (**58/58**).
+  - The test now hides the development server's own corner bubble, which had been sitting over the pane's corner.
+  - The fitted page in a narrow side-by-side column was only 33%: that is what the zoom is for.

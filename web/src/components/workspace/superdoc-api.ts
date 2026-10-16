@@ -38,6 +38,12 @@ interface UiLike {
 interface SuperDocLike {
   activeEditor?: { doc?: DocApi } | null;
   ui?: UiLike;
+  getZoom?: () => number;
+  setZoom?: (percent: number) => void;
+  setZoomMode?: (mode: "manual" | "fit-width") => void;
+  getZoomState?: () => { mode: "manual" | "fit-width"; value: number };
+  on?: (event: string, fn: (p: unknown) => void) => void;
+  off?: (event: string, fn: (p: unknown) => void) => void;
   setDocumentMode?: (m: string) => void;
   export?: (o: Record<string, unknown>) => Promise<Blob>;
   scrollToElement?: (id: string) => Promise<boolean>;
@@ -219,9 +225,64 @@ export function activateTrackedAt(sd: unknown, x: number, y: number): string | n
   }
 }
 
-/** Back to SuperDoc's own fit-to-width (one page per screen). */
+export interface ZoomState {
+  /** Percent, e.g. 100. */
+  value: number;
+  /** "fit-width": the page follows the column width; "manual": Karina chose a zoom. */
+  mode: "manual" | "fit-width";
+}
+
+export function zoomState(sd: unknown): ZoomState | null {
+  try {
+    const s = sdOf(sd);
+    const st = s?.getZoomState?.();
+    if (st) return { value: Math.round(st.value), mode: st.mode };
+    const v = s?.getZoom?.();
+    return typeof v === "number" ? { value: Math.round(v), mode: "manual" } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Zoom to a percentage (the pane then keeps it when it is resized). */
+export function setZoomPercent(sd: unknown, percent: number) {
+  try {
+    sdOf(sd)?.setZoom?.(Math.round(percent));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Fit the page to the column width again (never above 100%). */
+export function fitZoom(sd: unknown) {
+  try {
+    const s = sdOf(sd);
+    s?.setZoomMode?.("manual");
+    s?.setZoomMode?.("fit-width");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Follow every zoom change (the bar, Ctrl+wheel, fit-width re-fits). Returns the unsubscribe function. */
+export function onZoom(sd: unknown, fn: (z: ZoomState) => void): () => void {
+  const s = sdOf(sd);
+  if (!s?.on) return () => {};
+  const h = (p: unknown) => {
+    const z = p as { zoom?: number; mode?: ZoomState["mode"] };
+    if (typeof z?.zoom === "number") fn({ value: Math.round(z.zoom), mode: z.mode ?? "manual" });
+  };
+  s.on("zoomChange", h);
+  return () => s.off?.("zoomChange", h);
+}
+
+/**
+ * Back to SuperDoc's own fit-to-width (one page per screen), after a column was resized. A zoom Karina chose
+ * herself (manual) is kept.
+ */
 export function refitZoom(sd: unknown) {
   try {
+    if (zoomState(sd)?.mode === "manual") return;
     const zoom = sdOf(sd)?.ui?.zoom;
     zoom?.setMode?.("manual");
     zoom?.setMode?.("fit-width");

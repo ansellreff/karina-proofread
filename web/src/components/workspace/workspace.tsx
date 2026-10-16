@@ -58,6 +58,7 @@ import {
 } from "./superdoc-api";
 import { usePhone } from "./use-phone";
 import { VersionsPanel } from "./versions-panel";
+import { ZoomBar } from "./zoom-bar";
 
 const DocEditor = dynamic(() => import("./doc-editor"), {
   ssr: false,
@@ -181,6 +182,8 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
   const splitBox = useRef<HTMLDivElement>(null);
   useLinkedScroll(sideBySide && scrollLock, reviewPane, originalPane, paneTick);
   const originalSd = useRef<unknown>(null);
+  const getReviewSd = useCallback(() => sd.current, []);
+  const getOriginalSd = useCallback(() => originalSd.current, []);
   /** Which side the original is on, the left side's share of the width, and whether the review panel is open (remembered). */
   const [originalSide, setOriginalSide] = usePreference<"left" | "right">("original-side", "left");
   const [savedRatio, saveRatio] = usePreference("split-ratio", 0.5);
@@ -892,6 +895,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
                   originalSd.current = s;
                   setPaneTick((t) => t + 1);
                 }} />
+                {!phone && <ZoomBar which="original" superdoc={getOriginalSd} ready={paneTick} pane={originalPane} />}
               </div>
             </div>
           )}
@@ -945,11 +949,12 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName, online
           ) : (
             <EditorPlaceholder text="Opening the document…" />
           )}
+          {!phone && file && !editorError && <ZoomBar which="review" superdoc={getReviewSd} ready={paneTick} pane={reviewPane} />}
           </div>
           </div>
           {sideBySide && paneDrag && <DropZones drag={paneDrag} />}
           {!tipsSeen && !phone && file && (
-            <div role="note" className="no-print absolute bottom-4 left-4 z-20 hidden w-80 rounded-lg border bg-popover p-4 text-sm text-popover-foreground shadow-lg md:block">
+            <div role="note" className="no-print absolute bottom-14 left-4 z-30 hidden w-80 rounded-lg border bg-popover p-4 text-sm text-popover-foreground shadow-lg md:block">
               <p className="mb-1.5 font-medium">Quick tips</p>
               <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
                 <li>Click a change on the right to jump to it; <Kbd>J</Kbd> / <Kbd>K</Kbd> step through them.</li>
