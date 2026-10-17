@@ -91,6 +91,22 @@ const listTracked = () => page.evaluate(async () => (await window.__superdoc?.ac
 const tl = await listTracked();
 const trackedCount = tl?.total ?? tl?.items?.length ?? -1;
 check("editor shows Karina's tracked changes", trackedCount > 0, `${trackedCount} tracked changes`);
+// suggestions read as in Word: red text that keeps its bold/italic; the box and background stay the editor's
+const markLook = await page.evaluate(() => {
+  const look = (sel) => {
+    const el = document.querySelector(`[data-pane="review"] ${sel}`);
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    return { color: cs.color, border: cs.borderTopStyle, bg: cs.backgroundColor };
+  };
+  const bold = [...document.querySelectorAll('[data-pane="review"] .track-insert-dec.highlighted')].find((e) => Number(getComputedStyle(e).fontWeight) >= 600);
+  return { ins: look(".track-insert-dec.highlighted"), del: look(".track-delete-dec.highlighted"), boldKept: bold ? getComputedStyle(bold).color : "no bold insertion" };
+});
+check(
+  "suggestions show in red, as in Word (box and highlight unchanged)",
+  markLook.ins?.color === "rgb(192, 0, 0)" && (!markLook.del || markLook.del.color === "rgb(192, 0, 0)") && markLook.ins.border === "dashed" && markLook.ins.bg !== "rgba(0, 0, 0, 0)",
+  JSON.stringify(markLook),
+);
 const authors = [...new Set((tl?.items ?? []).map((i) => i.author))];
 check("tracked changes authored by Karina Octavia", authors.length === 1 && authors[0] === "Karina Octavia", JSON.stringify(authors));
 const sample0 = JSON.stringify((tl?.items ?? []).slice(0, 3).map((i) => ({ id: i.id, type: i.type, sourceIds: i.sourceIds, ins: i.insertedText, del: i.deletedText })));
@@ -428,7 +444,42 @@ const cleanZip = await JSZip.loadAsync(new Uint8Array(await cleanRes.arrayBuffer
 const cleanXml = await cleanZip.file("word/document.xml").async("string");
 const disposition = cleanRes.headers.get("content-disposition") ?? "";
 check("clean export: no tracked changes or comments", !/<w:(ins|del|rPrChange|pPrChange|commentReference)\b/.test(cleanXml) && !cleanZip.file("word/comments.xml"));
-check("export uses Karina's file naming", /DONE_[^_]+_Study Plan_\d{8}_clean\.docx/.test(decodeURIComponent(disposition)), disposition);
+check("export uses Karina's file naming (clean copy: same name, no ending added)", /DONE_[^_]+_Study Plan_\d{8}\.docx/.test(decodeURIComponent(disposition)), disposition);
+
+// Settings → Export file name: change the blocks, save, and the download follows; her own setting is put back after
+{
+  const before = (await (await fetch(`${base}/api/settings`)).json()).settings.fileName;
+  const putName = (fileName) => fetch(`${base}/api/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName }) });
+  await putName({ parts: [{ kind: "text", text: "DONE" }, { kind: "firstName" }, { kind: "docType" }, { kind: "date", format: "YYYYMMDD" }], separator: "_" });
+  const sp = await newPage({ width: 1280, height: 900 });
+  try {
+    await sp.goto(`${base}/settings`);
+    const section = sp.locator("section", { has: sp.getByRole("heading", { name: "Export file name" }) });
+    await section.waitFor({ timeout: 20000 });
+    await section.getByRole("button", { name: "Remove Document type" }).click();
+    await section.getByRole("button", { name: /^Block \d+: Date/ }).click();
+    await section.getByRole("radiogroup", { name: "Date format" }).getByRole("radio").nth(1).click(); // YYYY-MM-DD
+    await section.getByRole("button", { name: /Your text/ }).last().click();
+    await section.getByRole("group", { name: /Options for block/ }).getByRole("textbox").fill("V2?");
+    await section.getByRole("radiogroup", { name: "Between blocks" }).getByRole("radio", { name: /Dash/ }).click();
+    const preview = await section.getByLabel(/^Preview:/).getAttribute("aria-label");
+    await section.getByRole("button", { name: /^Block 4: V2/ }).dragTo(section.getByRole("button", { name: /^Block 1: DONE/ }));
+    const afterDrag = await section.getByLabel(/^Preview:/).getAttribute("aria-label");
+    const unsavedShown = await sp.getByText("You have changes that aren't saved yet.").isVisible();
+    await sp.getByRole("button", { name: "Save settings" }).click();
+    await sp.waitForTimeout(800);
+    const res = await fetch(`${base}/api/jobs/${job.id}/file?v=current&download=tracked`);
+    const name = decodeURIComponent(res.headers.get("content-disposition") ?? "");
+    check(
+      "Settings → Export file name: add, remove, move and set blocks; downloads use it",
+      /Preview: DONE-Anna-\d{4}-\d{2}-\d{2}-V2\.docx/.test(preview) && /Preview: V2-DONE-Anna-/.test(afterDrag) && unsavedShown && /filename\*=UTF-8''V2-DONE-[^-]+-\d{4}-\d{2}-\d{2}\.docx/.test(name),
+      `${preview} | ${afterDrag} | unsaved ${unsavedShown} | ${name.split("filename*=")[1] ?? name}`,
+    );
+  } finally {
+    await sp.close();
+    await putName(before);
+  }
+}
 const printPage = await newPage({ width: 1200, height: 900 });
 await printPage.addInitScript(() => { window.print = () => { window.__printed = true; }; });
 await printPage.goto(`${base}/jobs/${job.id}/print?v=${saved.current}&markup=0`);
@@ -654,7 +705,7 @@ if (pdfSample) {
       await pp.close();
       const cleanPdf = await fetch(`${base}/api/jobs/${pjob.id}/file?v=current&download=clean`);
       const czip = await JSZip.loadAsync(new Uint8Array(await cleanPdf.arrayBuffer()));
-      check("a reviewed PDF exports as a Word file", !!czip.file("word/document.xml") && /DONE_.+_clean\.docx/.test(decodeURIComponent(cleanPdf.headers.get("content-disposition") ?? "")), cleanPdf.headers.get("content-disposition") ?? "");
+      check("a reviewed PDF exports as a Word file", !!czip.file("word/document.xml") && /DONE_.+\.docx/.test(decodeURIComponent(cleanPdf.headers.get("content-disposition") ?? "")), cleanPdf.headers.get("content-disposition") ?? "");
       const ppv = await newPage({ width: 1200, height: 900 });
       await ppv.addInitScript(() => { window.print = () => { window.__printed = true; }; });
       await ppv.goto(`${base}/jobs/${pjob.id}/print?v=${plast.job.current}&markup=0`);

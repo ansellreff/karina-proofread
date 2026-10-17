@@ -1,3 +1,4 @@
+import { normalizeFormat } from "@/lib/naming";
 import { stores } from "@/lib/storage/stores";
 import type { Settings } from "@/lib/store/types";
 
@@ -28,6 +29,7 @@ export async function PUT(request: Request) {
   if (!["claude-opus-5-5", "claude-sonnet-5-5"].includes(next.model)) next.model = current.model;
   if (!["low", "medium", "high"].includes(next.effort)) next.effort = current.effort;
   next.authorName = (next.authorName || current.authorName).trim();
+  next.fileName = normalizeFormat(next.fileName);
   await store.saveSettings(next);
   return Response.json(next);
 }

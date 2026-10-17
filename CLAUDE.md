@@ -82,3 +82,5 @@ Private web app that proofreads student enrollment documents (study plans, autob
 ## Output rules
 - Tracked changes and comments are authored `Karina Octavia`; no bot/AI trace in the docx or its metadata.
 - Karina's notes to students are tracked inline insertions in parentheses, not Word comments.
+- Suggestions are red on screen only (`--track-change-text` in `globals.css`, like Word's author colour); never write a red `w:color` into the docx (it would stay red after accepting).
+- Download names come from Settings → Export file name (`settings.fileName`, `lib/naming.ts`: blocks + separator, `normalizeFormat` on save and use). Default `DONE_<first name>_<type>_<YYYYMMDD>`; the clean copy has the same name.

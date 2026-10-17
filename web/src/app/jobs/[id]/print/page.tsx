@@ -9,8 +9,10 @@ export const dynamic = "force-dynamic";
 export default async function PrintPage({ params, searchParams }: PageProps<"/jobs/[id]/print">) {
   const { id } = await params;
   const sp = await searchParams;
-  const job = await (await stores()).jobs.get(id).catch(() => null);
+  const store = (await stores()).jobs;
+  const job = await store.get(id).catch(() => null);
   if (!job) notFound();
   const v = Number(sp.v ?? job.current);
-  return <PrintView jobId={job.id} version={v} fileName={job.fileName} title={doneFileName(job, "pdf").replace(/\.pdf$/, "")} markup={sp.markup === "1"} />;
+  const { fileName: format } = await store.getSettings();
+  return <PrintView jobId={job.id} version={v} fileName={job.fileName} title={doneFileName(job, "pdf", format).replace(/\.pdf$/, "")} markup={sp.markup === "1"} />;
 }

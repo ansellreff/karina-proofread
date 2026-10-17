@@ -746,3 +746,40 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 ### Verified
 - 77 unit tests, lint and type check pass.
 - Full end-to-end test (Word sample, no PDF): **54/54**. New check: locking makes both sides the same zoom; a zoom of 120% on the review goes to the original, and a + on the original brings the review to 130%. The existing check still confirms that unlocked sides zoom on their own.
+
+## Red suggestions on screen, and the export file name in Settings
+**Request:** suggestions in the web app should look like they do in Word (red text), and the export file name should be adjustable in Settings.
+
+### Suggestions in red
+- **What she saw:** in the web app, a suggestion was black text in a blue (added) or red (removed) box. In Word, the same suggestion is red underlined (added) or red struck through (removed).
+- **Why they differed:** the red in Word isn't saved in the file. Word colours tracked changes by who made them, and on her PC it uses red for "Karina Octavia". The exported file has no red text: once the student accepts the changes, the text is black. Word on the student's computer may use a different colour.
+- **Now:** in the web app, added and removed text is **red** (a dark red, close to Word's). It keeps its own **bold and italic**. The boxes, backgrounds, the highlight on the selected change and the cards are unchanged, as she asked.
+- **Only the screen changes;** the exported Word file is exactly as before. This also applies on the phone and in "PDF with markup". "Viewing" (no markup) stays black, like Word's "No Markup".
+
+### Export file name (Settings → Export file name)
+- **Blocks:** the name is a row of blocks:
+  - **your text** (for example DONE, REVISED);
+  - **first name**;
+  - **full name**;
+  - **document type**;
+  - **date**;
+  - **original file name**.
+- **Editing:** add a block, remove it with ×, move it by dragging (or Move left / Move right), and choose what goes **between blocks**: _ , - , a space, or nothing.
+- **Options per block:**
+  - date format (20261017, 2026-10-17, 17-10-2026, 17102026);
+  - names and the original file name can be shortened to the first N letters.
+- **Preview:** a live preview with a made-up student (Anna) underlines the selected block.
+- **Reset:** **Back to DONE_Name_Type_Date** restores her convention.
+- **Saving:** a bar now sticks to the bottom of Settings with **Save settings** whenever something isn't saved yet.
+- **Safety:** characters Windows can't use in file names are left out. A name always keeps at least one block, with at most 10.
+- **Where it's used:** Word, clean Word and PDF downloads, on this PC and online.
+- **Clean copy:** it no longer gets `_clean` at the end (her choice). The clean Word file and the Word file with changes now have the same name, so if both go into one folder the browser adds "(1)" to the second.
+- The default is unchanged: `DONE_<first name>_<type>_<YYYYMMDD>`.
+
+### Verified
+- 80 unit tests (3 new for file names: the default as before, any blocks/order/separator/date/length, unsafe input), lint and type check pass.
+- Full end-to-end test (Word sample): **56/56**. New checks:
+  - added and removed text is red, with the box and background unchanged;
+  - in Settings: remove a block, change the date format, add text (an unsafe "?" is left out), choose the dash, drag a block to the front, then save; the download is then named that way.
+  - Her own setting is put back after the test.
+- Screenshots of the new section checked on desktop (light) and phone (dark).

@@ -1,3 +1,4 @@
+import { DEFAULT_FILE_NAME, type FileNameFormat } from "../naming";
 import type { ChangeRecord } from "../pipeline";
 import type { DocType } from "../rules/types";
 import type { DocScore } from "../score/score";
@@ -57,6 +58,8 @@ export interface Settings {
   /** API balance Karina entered, used for the "remaining" estimate. */
   balanceUsd: number | null;
   balanceSetAt: string | null;
+  /** How downloads are named (Settings → Export file name). */
+  fileName: FileNameFormat;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -66,6 +69,7 @@ export const DEFAULT_SETTINGS: Settings = {
   authorName: "Karina Octavia",
   balanceUsd: null,
   balanceSetAt: null,
+  fileName: DEFAULT_FILE_NAME,
 };
 
 /** A deleted document, kept so it can be restored. */

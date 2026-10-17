@@ -4,12 +4,14 @@ import { useTheme } from "next-themes";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { AiLockSection } from "@/components/ai-unlock";
+import { FileNameSection } from "@/components/file-name-format";
 import { Segmented } from "@/components/rules/bits";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { Settings } from "@/lib/store/types";
+import { cn } from "@/lib/utils";
 
 /** Light / dark / system and paper colour: per browser, applied right away. */
 function Appearance() {
@@ -94,6 +96,8 @@ export function SettingsForm() {
   }
 
   if (!s || !info) return <p className="text-muted-foreground">Loading…</p>;
+  const savedBalance = info.settings.balanceUsd === null ? "" : String(info.settings.balanceUsd);
+  const dirty = JSON.stringify(s) !== JSON.stringify(info.settings) || balance.trim() !== savedBalance;
 
   return (
     <div className="space-y-8">
@@ -128,6 +132,7 @@ export function SettingsForm() {
           <Input value={s.authorName} onChange={(e) => setS({ ...s, authorName: e.target.value })} className="max-w-xs" />
         </Field>
       </section>
+      <FileNameSection value={s.fileName} onChange={(fileName) => setS({ ...s, fileName })} />
       <AiLockSection />
 
       <section className="space-y-5 rounded-lg border bg-card p-5">
@@ -155,7 +160,10 @@ export function SettingsForm() {
         </dl>
       </section>
 
-      <Button onClick={save}>Save settings</Button>
+      <div className={cn("bottom-0 z-10 -mx-1 flex items-center gap-3 px-1 py-3", dirty && "sticky border-t bg-background/95 backdrop-blur")}>
+        <Button onClick={save}>Save settings</Button>
+        {dirty && <span className="text-sm text-muted-foreground">You have changes that aren&apos;t saved yet.</span>}
+      </div>
     </div>
   );
 }

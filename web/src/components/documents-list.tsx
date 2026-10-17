@@ -287,7 +287,7 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
   );
 }
 
-/** Correct the student's name (it is used in the DONE_ file names). */
+/** Correct the student's name (it is used in the export file names). */
 export function RenameDialog({ job, onClose, onSaved }: { job: { id: string; studentName: string | null } | null; onClose: () => void; onSaved: (name: string | null) => void }) {
   const [name, setName] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -313,7 +313,7 @@ export function RenameDialog({ job, onClose, onSaved }: { job: { id: string; stu
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Student’s name</DialogTitle>
-          <DialogDescription>Shown in the list and used in the exported file names (DONE_&lt;first name&gt;_…). Use the name the student goes by.</DialogDescription>
+          <DialogDescription>Shown in the list and used in the exported file names (set in Settings → Export file name). Use the name the student goes by.</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={(e) => {
