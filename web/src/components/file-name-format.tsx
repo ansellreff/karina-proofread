@@ -204,7 +204,7 @@ export function FileNameSection({ value, onChange }: { value: FileNameFormat; on
             setSelected(null);
           }}
         >
-          <RotateCcw /> Back to DONE_Name_Type_Date
+          <RotateCcw /> Back to DONE_Type_Name_Date
         </Button>
       </div>
     </section>

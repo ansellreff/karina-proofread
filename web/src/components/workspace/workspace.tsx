@@ -33,10 +33,11 @@ import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import { OriginalPane } from "./original-pane";
 import { ScorePanel, scoreTone, type Scores } from "./score-panel";
-import { DropZones, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePreference, type PaneView } from "./split-view";
+import { DropZones, PANEL_DEFAULT, PANEL_MAX_SHARE, PANEL_MIN, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePreference, type PaneView } from "./split-view";
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
+import { ReviewBar, type FormatMarks } from "./review-bar";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { useShortcuts } from "./use-shortcuts";
 import {
@@ -119,6 +120,18 @@ interface Decision {
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 /** First non-empty line, short enough for a text search. */
 const searchable = (s: string) => (s.split("\n").map((l) => l.trim()).find(Boolean) ?? "").slice(0, 80);
+const rejectLabel = (c: PanelChange) => (c.before && c.kind !== "format" ? "Change rejected, original text restored" : "Change rejected");
+/** One line for the review bar: "Your edit: my self → myself". */
+function describeChange(c: PanelChange): string {
+  const clip = (s: string) => {
+    const t = norm(s);
+    return t.length > 40 ? `${t.slice(0, 40)}…` : t;
+  };
+  const what = c.own ?? (c.kind === "format" ? "Formatting" : c.kind === "note" || c.kind === "paragraph" ? "Note" : "Fix");
+  if (c.kind === "format") return c.own ? c.after : what;
+  const text = c.before && c.after ? `${clip(c.before)} → ${clip(c.after)}` : c.before ? `removed “${clip(c.before)}”` : `added “${clip(c.after)}”`;
+  return `${what}: ${text}`;
+}
 
 export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string }) {
   const router = useRouter();
@@ -191,7 +204,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const [liveRatio, setLiveRatio] = useState<number | null>(null); // while dragging the divider
   const ratio = liveRatio ?? savedRatio;
   const [panelOpen, setPanelOpen] = usePreference("panel-open", true);
-  const [savedPanelWidth, savePanelWidth] = usePreference("panel-width", 380);
+  const [savedPanelWidth, savePanelWidth] = usePreference("panel-width", PANEL_DEFAULT);
   const [livePanelWidth, setLivePanelWidth] = useState<number | null>(null); // while dragging its edge
   const panelWidth = livePanelWidth ?? savedPanelWidth;
   const swapSides = () => setOriginalSide(originalSide === "left" ? "right" : "left");
@@ -210,7 +223,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     };
     const t = setTimeout(fit, 120);
     return () => clearTimeout(t);
-  }, [sideBySide, phone, paneTick, savedRatio, panelOpen, savedPanelWidth]);
+  }, [sideBySide, phone, paneTick, savedRatio, panelOpen, panelWidth]);
 
   // ---- load the requested version into the editor
   useEffect(() => {
@@ -314,17 +327,49 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     }
     return items;
   }, [job.proofread, shown, tracked, authorName]);
-  const linked = new Set(panelChanges.flatMap((c) => c.live.map((t) => t.id)));
-  const otherOpen = tracked.filter((t) => !linked.has(t.id)).length;
-  const activeKey = activeId ? (panelChanges.find((c) => c.live.some((t) => t.id === activeId))?.key ?? null) : pickedKey;
+  // every other open tracked change (Karina's own edits in Suggesting mode, or any already in the file): one card each
+  const ownChanges: PanelChange[] = useMemo(() => {
+    const linked = new Set(panelChanges.flatMap((c) => c.live.map((t) => t.id)));
+    return tracked
+      .filter((t) => !linked.has(t.id))
+      .map((t): PanelChange => {
+        const format = t.type === "formatting";
+        return {
+          rule: "own",
+          kind: format ? "format" : t.deletedText && !t.insertedText ? "delete" : "fix",
+          paragraph: -1,
+          start: 0,
+          end: 0,
+          before: format ? "" : (t.deletedText ?? ""),
+          after: format ? `Formatting change${t.excerpt ? `: “${t.excerpt.slice(0, 80)}”` : ""}` : (t.insertedText ?? ""),
+          key: `own:${t.id}`,
+          live: [t],
+          own: !t.author || t.author === authorName ? "Your edit" : `Edit by ${t.author}`,
+        };
+      });
+  }, [panelChanges, tracked, authorName]);
+  const allChanges = useMemo(() => [...panelChanges, ...ownChanges], [panelChanges, ownChanges]);
+  const activeKey = activeId ? (allChanges.find((c) => c.live.some((t) => t.id === activeId))?.key ?? null) : pickedKey;
+
+  // ---- the open changes in document order (review bar, J/K); formatting is skipped while its marks are hidden
+  const [formatMarks, setFormatMarks] = usePreference<FormatMarks>("format-marks", "hidden");
+  const openInOrder = useMemo(() => {
+    const pos = new Map(tracked.map((t, i) => [t.id, i]));
+    const first = (c: PanelChange) => Math.min(...c.live.map((t) => pos.get(t.id) ?? Number.MAX_SAFE_INTEGER));
+    return allChanges.filter((c) => c.live.length > 0 && (formatMarks === "shown" || c.kind !== "format")).sort((a, b) => first(a) - first(b));
+  }, [allChanges, tracked, formatMarks]);
+  const openFormat = allChanges.filter((c) => c.kind === "format" && c.live.length > 0).reduce((n, c) => n + c.live.length, 0);
 
   /** Scroll the document to a change from the panel and highlight it there. */
   const focusChange = async (c: PanelChange) => {
     setPickedKey(c.key);
     if (phone) setSheetOpen(false); // the sheet would cover the document
     let found = false;
-    if (c.live[0]) found = await focusTracked(sd.current, c.live[0].id);
-    else {
+    if (c.live[0]) {
+      found = await focusTracked(sd.current, c.live[0].id);
+      // the editor does not always report the new active change (a replacement), so the old highlight stayed
+      setActiveId(c.live[0].id);
+    } else {
       clearActiveTracked(sd.current);
       setActiveId(null);
     }
@@ -391,9 +436,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     toast("That passage has changed since, so it can’t be found any more.");
   }
 
-  /** Phone arrows (all changes) and J/K (only the ones still open): step without opening the panel. */
+  /** Phone arrows (all changes) and J/K and the review bar (open ones, in document order): step without the panel. */
   const stepAll = (dir: 1 | -1, openOnly = false) => {
-    const stops = panelChanges.filter((c) => canLocate(c) && (!openOnly || c.live.length > 0));
+    const stops = openOnly ? openInOrder : allChanges.filter(canLocate);
     if (!stops.length) return;
     const at = stops.findIndex((c) => c.key === activeKey);
     const next = at < 0 ? (dir === 1 ? 0 : stops.length - 1) : (at + dir + stops.length) % stops.length;
@@ -529,7 +574,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       <div className="flex h-11 shrink-0 items-center border-b pr-1.5">
       <TabsList variant="line" className="h-11 min-w-0 flex-1 justify-start gap-1 overflow-x-auto rounded-none px-2.5">
         <TabsTrigger value="changes" className="flex-none">
-          What changed {panelChanges.length > 0 && <span className="tabular-nums text-muted-foreground">{panelChanges.length}</span>}
+          What changed {allChanges.length > 0 && <span className="tabular-nums text-muted-foreground">{allChanges.length}</span>}
         </TabsTrigger>
         <TabsTrigger value="score" className="flex-none">
           Score {scores && <span className={cn("tabular-nums", scoreTone(scores.current.total))}>{scores.current.total}</span>}
@@ -546,14 +591,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         </Button>
       </div>
       <TabsContent value="changes" className="min-h-0 flex-1">
-        {panelChanges.length > 0 ? (
+        {allChanges.length > 0 ? (
           <ChangesPanel
-            changes={panelChanges}
-            otherOpen={otherOpen}
+            changes={allChanges}
             onAccept={(c) => apply("accept", [c], "Change accepted")}
-            onReject={(c) => apply("reject", [c], c.before ? "Change rejected, original text restored" : "Change rejected")}
-            onAcceptAll={() => apply("accept", panelChanges, "All changes accepted")}
-            onRejectAll={() => apply("reject", panelChanges, "All changes rejected")}
+            onReject={(c) => apply("reject", [c], rejectLabel(c))}
+            onAcceptAll={() => apply("accept", allChanges, "All changes accepted")}
+            onRejectAll={() => apply("reject", allChanges, "All changes rejected")}
             onRestoreRemoved={(items) => apply("reject", items, "Removed text restored")}
             undoLabel={decisions.at(-1)?.label ?? null}
             onUndo={() => void undoDecision()}
@@ -607,7 +651,17 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   );
 
   const shownVersion = job.versions.find((v) => v.n === shown);
-  const activeChange = panelChanges.find((c) => c.key === activeKey);
+  const activeChange = allChanges.find((c) => c.key === activeKey);
+  /** Accept or reject the highlighted change, then go to the next open one (review bar and A/R keys). */
+  const decideActive = (action: "accept" | "reject") => {
+    if (!activeChange?.live.length) {
+      toast("Highlight an open change first: press Next (J), or click one in the document or in What changed.");
+      return;
+    }
+    void apply(action, [activeChange], action === "accept" ? "Change accepted" : rejectLabel(activeChange)).then(() => stepAll(1, true));
+  };
+  const barPosition = openInOrder.findIndex((c) => c.key === activeKey);
+  const barCurrent = activeChange ? describeChange(activeChange) : null;
 
   // ---- keyboard shortcuts (letters only when the cursor is not in the document text)
   useShortcuts((action) => {
@@ -617,15 +671,8 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
       case "prev":
         return stepAll(-1, true);
       case "accept":
-      case "reject": {
-        if (!activeChange?.live.length) {
-          toast("Highlight an open change first: press J, or click one in What changed.");
-          return;
-        }
-        const label = action === "accept" ? "Change accepted" : activeChange.before ? "Change rejected, original text restored" : "Change rejected";
-        void apply(action, [activeChange], label).then(() => stepAll(1, true));
-        return;
-      }
+      case "reject":
+        return decideActive(action);
       case "undo":
         return void undoDecision();
       case "save":
@@ -653,7 +700,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   });
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col" data-format-marks={formatMarks}>
       {/* top bar */}
       <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-3 py-2 sm:px-4">
         <Link href="/" className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Back to documents">
@@ -881,6 +928,23 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               drag={paneDragHandlers("review")}
             />
           )}
+          {file && !editorError && (
+            <ReviewBar
+              position={barPosition}
+              total={openInOrder.length}
+              current={barCurrent}
+              onStep={(dir) => stepAll(dir, true)}
+              onAccept={() => decideActive("accept")}
+              onReject={() => decideActive("reject")}
+              onAcceptAll={() => apply("accept", allChanges, "All changes accepted")}
+              onRejectAll={() => apply("reject", allChanges, "All changes rejected")}
+              mode={mode}
+              onTracking={(on) => changeMode(on ? "suggesting" : "editing")}
+              formatMarks={formatMarks}
+              onFormatMarks={setFormatMarks}
+              formatCount={openFormat}
+            />
+          )}
           <div className="relative min-h-0 flex-1">
           {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
           {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
@@ -918,7 +982,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             <div role="note" className="no-print absolute bottom-14 left-4 z-30 hidden w-80 rounded-lg border bg-popover p-4 text-sm text-popover-foreground shadow-lg md:block">
               <p className="mb-1.5 font-medium">Quick tips</p>
               <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
-                <li>Click a change on the right to jump to it; <Kbd>J</Kbd> / <Kbd>K</Kbd> step through them.</li>
+                <li>The bar above the page steps through the changes (or <Kbd>J</Kbd> / <Kbd>K</Kbd>) and accepts or rejects them.</li>
                 <li><Kbd>A</Kbd> accepts, <Kbd>R</Kbd> rejects, <Kbd>U</Kbd> undoes, when the cursor isn’t in the text.</li>
                 <li>Side by side: drag a page by its title bar to swap the sides.</li>
               </ul>
@@ -934,7 +998,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
           )}
         </div>
         {panelOpen ? (
-          <aside className="relative hidden shrink-0 flex-col border-l bg-card lg:flex" style={{ width: panelWidth, maxWidth: "55vw", minWidth: 300 }}>
+          <aside className="relative hidden shrink-0 flex-col border-l bg-card lg:flex" style={{ width: panelWidth, maxWidth: `${PANEL_MAX_SHARE * 100}vw`, minWidth: PANEL_MIN }}>
             <PanelResizer width={panelWidth} onWidth={setLivePanelWidth} onCommit={(w) => {
               setLivePanelWidth(null);
               savePanelWidth(w);
@@ -946,10 +1010,10 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             <Button size="icon-sm" variant="ghost" onClick={() => setPanelOpen(true)} title="Show the review panel" aria-label="Show the review panel">
               <PanelRightOpen />
             </Button>
-            {panelChanges.length > 0 && (
+            {allChanges.length > 0 && (
               <button type="button" onClick={() => { setTab("changes"); setPanelOpen(true); }} title="What changed" className="flex flex-col items-center rounded px-1 py-1.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground">
                 <MessageSquareText className="size-4" />
-                <span className="tabular-nums">{panelChanges.filter((c) => c.live.length > 0).length}</span>
+                <span className="tabular-nums">{allChanges.filter((c) => c.live.length > 0).length}</span>
               </button>
             )}
             {scores && canScore && (
@@ -963,15 +1027,15 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
 
       {/* phone / tablet: panel as a bottom sheet */}
       <div className="no-print fixed inset-x-0 bottom-4 z-30 flex justify-center gap-1.5 lg:hidden">
-        {panelChanges.length > 0 && (
+        {allChanges.length > 0 && (
           <Button size="icon" variant="outline" className="bg-card shadow-lg" onClick={() => stepAll(-1)} aria-label="Previous change">
             <ChevronUp />
           </Button>
         )}
         <Button className="shadow-lg" onClick={() => setSheetOpen(true)}>
-          {tab === "versions" ? <ListChecks /> : <MessageSquareText />} {panelChanges.length ? `${panelChanges.length} changes` : "Review panel"}
+          {tab === "versions" ? <ListChecks /> : <MessageSquareText />} {allChanges.length ? `${allChanges.length} changes` : "Review panel"}
         </Button>
-        {panelChanges.length > 0 && (
+        {allChanges.length > 0 && (
           <Button size="icon" variant="outline" className="bg-card shadow-lg" onClick={() => stepAll(1)} aria-label="Next change">
             <ChevronDown />
           </Button>

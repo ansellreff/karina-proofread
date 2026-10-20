@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { acceptAllRevisions } from "../docx/accept";
 import { DocxPackage } from "../docx/package";
 import { bodyParagraphs } from "../docx/paragraphs";
+import { DEFAULT_FILE_NAME, normalizeFormat, OLD_DEFAULT_FILE_NAME } from "../naming";
 import { pdfToDocx } from "../pdf/pdf-to-docx";
 import { buildContext, detectName } from "../rules/detect";
 import { readJson, readText, writeJson, type AppFiles } from "../storage/files";
@@ -30,6 +31,8 @@ export class FileJobStore implements JobStore {
 
   private normalize(job: Job): Job {
     if (job.status === "proofreading" && Date.now() - Date.parse(job.updatedAt) > STALLED_MS) job.status = job.versions.length > 1 ? "ready" : "new";
+    // an older guess took the submission date for the name ("Study Plan_Ruddy_20261005" -> "20261005"); guess again
+    if (job.studentName && NOT_A_NAME.test(job.studentName.trim())) job.studentName = guessNameFromFile(job.fileName);
     return job;
   }
 
@@ -188,7 +191,10 @@ export class FileJobStore implements JobStore {
   }
 
   async getSettings(): Promise<Settings> {
-    return { ...DEFAULT_SETTINGS, ...((await readJson<Partial<Settings>>(this.files, "settings.json")) ?? {}) };
+    const s: Settings = { ...DEFAULT_SETTINGS, ...((await readJson<Partial<Settings>>(this.files, "settings.json")) ?? {}) };
+    // the old default order (DONE_name_type_date) moved to DONE_type_name_date; a format she customised is kept
+    if (JSON.stringify(normalizeFormat(s.fileName)) === JSON.stringify(OLD_DEFAULT_FILE_NAME)) s.fileName = DEFAULT_FILE_NAME;
+    return s;
   }
 
   async saveSettings(s: Settings): Promise<void> {
@@ -215,15 +221,21 @@ export class FileJobStore implements JobStore {
   }
 }
 
-/** "StudyPlan_(SINTA) NYUST.docx" -> "SINTA"; "Sinta_Autobiography.docx" -> "Sinta". */
+/** Parts of a file name that are never the student's name: dates and numbers, and words like DONE or V2. */
+const NOT_A_NAME = /^(?:[\d\s.\-/]+|done|final|revised?|rev\d*|v\d+|draft|copy)$/i;
+const DOC_TYPE = /study ?plan|autobio|statement|essay|resume|curriculum|recommendation|script|personal|motivation|cover ?letter|portfolio|\b(?:cv|sop|ps|lor)\b/i;
+
+/**
+ * The student's name from the file name, when the document doesn't say it:
+ * "StudyPlan_(SINTA) NYUST.docx" -> "SINTA"; "Sinta_Autobiography.docx" -> "Sinta";
+ * "Study Plan_Ruddy_20261005.docx" -> "Ruddy" (the date is skipped); "SOP_TSE NTHU_Someone.docx" -> "Someone".
+ */
 export function guessNameFromFile(fileName: string): string | null {
-  const stem = fileName.replace(/\.docx$/i, "").replace(/^DONE_/, "");
+  const stem = fileName.replace(/\.(docx|pdf)$/i, "");
   const paren = /\(([^)]+)\)/.exec(stem);
-  if (paren) return paren[1].trim();
-  const first = stem.split("_")[0].trim();
-  if (/study ?plan|autobio|statement|essay|resume|cv|recommendation|script/i.test(first)) {
-    const last = stem.split("_").at(-1)?.trim();
-    return last && !/study ?plan|autobio|statement|essay/i.test(last) ? last : null;
-  }
-  return first || null;
+  if (paren && !NOT_A_NAME.test(paren[1].trim())) return paren[1].trim();
+  const parts = stem.split("_").map((p) => p.trim()).filter(Boolean);
+  const isName = (p: string) => !NOT_A_NAME.test(p) && !DOC_TYPE.test(p);
+  if (parts[0] && isName(parts[0])) return parts[0];
+  return parts.filter(isName).at(-1) ?? null;
 }

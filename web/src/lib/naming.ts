@@ -32,8 +32,13 @@ export interface FileNameFormat {
   separator: Separator;
 }
 
-/** Karina's convention: DONE_<first name>_<type>_<YYYYMMDD>. */
+/** Karina's convention: DONE_<type>_<first name>_<YYYYMMDD> (the order students use: type, then name). */
 export const DEFAULT_FILE_NAME: FileNameFormat = {
+  parts: [{ kind: "text", text: "DONE" }, { kind: "docType" }, { kind: "firstName" }, { kind: "date", format: "YYYYMMDD" }],
+  separator: "_",
+};
+/** The default until 2026-10-21; a saved copy of it is read as the new default (job-store getSettings). */
+export const OLD_DEFAULT_FILE_NAME: FileNameFormat = {
   parts: [{ kind: "text", text: "DONE" }, { kind: "firstName" }, { kind: "docType" }, { kind: "date", format: "YYYYMMDD" }],
   separator: "_",
 };

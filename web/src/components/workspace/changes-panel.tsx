@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils";
 import type { ChangeRecord } from "@/lib/pipeline";
 import type { TrackedItem } from "./superdoc-api";
 
-export type Filter = "all" | "notes" | "fixes" | "removed" | "beyond";
+export type Filter = "all" | "notes" | "fixes" | "removed" | "beyond" | "own";
 
 export interface PanelChange extends ChangeRecord {
   key: string;
   /** Tracked changes in the editor that belong to this bot change; empty once accepted/rejected. */
   live: TrackedItem[];
+  /** Not the bot's: a tracked change Karina (or someone else) made, with its card label ("Your edit"). */
+  own?: string;
 }
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -21,14 +23,17 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "notes", label: "Notes" },
   { id: "removed", label: "Removed text" },
   { id: "beyond", label: "Beyond your style" },
+  { id: "own", label: "Your edits" },
 ];
 
-const isRemoval = (c: ChangeRecord) => c.before.length > 0;
+const isRemoval = (c: PanelChange) => !c.own && c.before.length > 0;
 /** Whether "show in document" can find it (resolved formatting leaves nothing to point at). */
-export const canLocate = (c: PanelChange) => c.live.length > 0 || c.kind !== "format";
-const isNote = (c: ChangeRecord) => c.kind === "note" || c.kind === "paragraph";
+export const canLocate = (c: PanelChange) => c.live.length > 0 || (c.kind !== "format" && !c.own);
+const isNote = (c: PanelChange) => !c.own && (c.kind === "note" || c.kind === "paragraph");
+const isFix = (c: PanelChange) => !c.own && !isNote(c) && c.kind !== "delete";
 
-function kindLabel(c: ChangeRecord): string {
+function kindLabel(c: PanelChange): string {
+  if (c.own) return c.own;
   if (c.kind === "format") return "Formatting";
   if (c.rule === "end-note") return "Note block";
   if (c.rule.startsWith("header")) return "Header";
@@ -59,7 +64,6 @@ function Redline({ c }: { c: ChangeRecord }) {
 
 export function ChangesPanel({
   changes,
-  otherOpen,
   onAccept,
   onReject,
   onAcceptAll,
@@ -72,9 +76,8 @@ export function ChangesPanel({
   undoable,
   onUndoAt,
 }: {
+  /** The bot's changes, then the open tracked changes not created by the bot (Karina's own edits). */
   changes: PanelChange[];
-  /** Open tracked changes not created by the bot (e.g. Karina's own suggestions). */
-  otherOpen: number;
   onAccept: (c: PanelChange) => void;
   onReject: (c: PanelChange) => void;
   onAcceptAll: () => void;
@@ -91,23 +94,32 @@ export function ChangesPanel({
   undoable: Map<string, { decision: "accept" | "reject"; index: number; later: number }>;
   onUndoAt: (index: number) => void;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [picked, setFilter] = useState<Filter>("all");
   const cards = useRef(new Map<string, HTMLLIElement>());
   const counts = useMemo(
     () => ({
       all: changes.length,
-      fixes: changes.filter((c) => !isNote(c) && c.kind !== "delete").length,
+      fixes: changes.filter(isFix).length,
       notes: changes.filter(isNote).length,
       removed: changes.filter(isRemoval).length,
       beyond: changes.filter((c) => c.beyondStyle).length,
+      own: changes.filter((c) => c.own).length,
     }),
     [changes],
   );
+  // a filter that empties (the last own edit accepted) falls back to All
+  const filter: Filter = counts[picked] === 0 ? "all" : picked;
   const shown = changes.filter((c) =>
-    filter === "all" ? true : filter === "fixes" ? !isNote(c) && c.kind !== "delete" : filter === "notes" ? isNote(c) : filter === "removed" ? isRemoval(c) : !!c.beyondStyle,
+    filter === "all" ? true : filter === "fixes" ? isFix(c) : filter === "notes" ? isNote(c) : filter === "removed" ? isRemoval(c) : filter === "own" ? !!c.own : !!c.beyondStyle,
   );
   const open = changes.filter((c) => c.live.length > 0);
   const openRemoved = changes.filter((c) => isRemoval(c) && c.live.length > 0);
+  const bot = changes.filter((c) => !c.own);
+  const openBot = bot.filter((c) => c.live.length > 0).length;
+  const ownCount = counts.own;
+  const summary = bot.length
+    ? `${openBot} of ${bot.length} bot changes still open${ownCount ? `, plus ${ownCount} of your edits` : ""}.`
+    : `${ownCount} of your edits still open.`;
 
   // keep the highlighted card visible when Karina clicks a change in the document
   useEffect(() => {
@@ -128,9 +140,7 @@ export function ChangesPanel({
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-3 border-b px-4 pt-3 pb-3">
         <div className="flex items-start gap-2">
-          <p className="flex-1 text-sm text-muted-foreground">
-            {open.length} of {changes.length} bot changes still open{otherOpen > 0 ? `, plus ${otherOpen} of your own` : ""}.
-          </p>
+          <p className="flex-1 text-sm text-muted-foreground">{summary}</p>
           <div className="flex shrink-0 items-center gap-0.5">
             {position >= 0 && (
               <span className="mr-1 text-xs tabular-nums text-muted-foreground">

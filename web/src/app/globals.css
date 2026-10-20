@@ -218,9 +218,10 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
   background: linear-gradient(transparent 55%, color-mix(in srgb, var(--mark) 85%, transparent) 55%);
 }
 
-/* Side by side: SuperDoc's layer sizes itself to a full page, so in a half-width column the page is centred in a
-   box wider than the column and its right edge is cut off. Make the layer follow the column instead. */
-[data-split] .superdoc__layers {
+/* SuperDoc's layer sizes itself to the page, so fit-width measured the page instead of the column: the page could
+   only shrink (never grow when the document is dragged wider), sat flush left, and in a half-width column its right
+   edge was cut off. Make the layer follow the column in every pane. */
+[data-pane] .superdoc__layers {
   width: 100%;
   min-width: 0;
 }
@@ -236,6 +237,13 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
 .superdoc-layout :is(.track-insert-dec, .track-delete-dec).highlighted,
 .superdoc-web-flow-run:is(.track-insert-dec, .track-delete-dec).highlighted {
   color: var(--track-change-text) !important;
+}
+
+/* Review bar → Formatting marks off (the default): formatting changes keep no gold underline or margin bar, so the
+   wording changes stand out. They stay in the file and in the review panel. */
+[data-format-marks="hidden"] {
+  --sd-tracked-changes-format-border: transparent;
+  --sd-track-format-border: transparent;
 }
 
 /* SuperDoc's web (phone) layout ships no tracked-change styles; mirror its page layout's markup. */

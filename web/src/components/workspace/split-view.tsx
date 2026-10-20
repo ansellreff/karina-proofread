@@ -168,37 +168,57 @@ export function SplitDivider({ container, ratio, onRatio, onCommit, order, locke
   );
 }
 
-export const PANEL_MIN = 300;
-const panelMax = () => Math.max(PANEL_MIN, Math.min(720, Math.round(window.innerWidth * 0.55)));
+export const PANEL_MIN = 260;
+export const PANEL_DEFAULT = 380;
+/** The review panel may take up to 70% of the window, so the document can be made narrow too. */
+export const PANEL_MAX_SHARE = 0.7;
+const panelMax = () => Math.max(PANEL_MIN, Math.round(window.innerWidth * PANEL_MAX_SHARE));
 
-/** Left edge of the review panel: hold and drag to make the panel wider or narrower. Double-click resets. */
+/**
+ * The edge between the document and the review panel: always shown as a grip, drag it to make the document wider
+ * or narrower (the page follows, see doc-editor ZOOM). Arrow keys nudge; double-click resets.
+ */
 export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWidth: (w: number) => void; onCommit: (w: number) => void }) {
-  const dragging = useRef(false);
   const clamp = (w: number) => Math.min(panelMax(), Math.max(PANEL_MIN, Math.round(w)));
   const at = (clientX: number) => clamp(window.innerWidth - clientX);
+  const latest = useRef({ onWidth, onCommit });
+  useEffect(() => {
+    latest.current = { onWidth, onCommit };
+  });
+  // The drag follows the mouse over the whole window: with pointer capture alone, the editors next to it (side by
+  // side) took the pointer over mid-drag and the browser cancelled it after a few pixels.
+  const start = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); // no text selection or native drag while resizing
+    let last = e.clientX;
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      document.body.style.removeProperty("cursor");
+      latest.current.onCommit(at(last));
+    };
+    // a pointercancel from a neighbour is ignored; the drag ends when the button is released
+    function move(ev: PointerEvent) {
+      if (ev.buttons === 0) return end();
+      last = ev.clientX;
+      latest.current.onWidth(at(last));
+    }
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+  };
   return (
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the review panel"
+      aria-label="Resize the document and the review panel"
       aria-valuemin={PANEL_MIN}
-      aria-valuemax={720}
       aria-valuenow={width}
       tabIndex={0}
-      title="Drag to resize the panel (double-click to reset)"
-      className="group absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none"
-      onPointerDown={(e) => {
-        dragging.current = true;
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={(e) => dragging.current && onWidth(at(e.clientX))}
-      onPointerUp={(e) => {
-        if (!dragging.current) return;
-        dragging.current = false;
-        e.currentTarget.releasePointerCapture(e.pointerId);
-        onCommit(at(e.clientX));
-      }}
-      onDoubleClick={() => onCommit(380)}
+      title="Drag to make the document wider or narrower (double-click to reset)"
+      className="group absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none outline-none"
+      onPointerDown={start}
+      onDoubleClick={() => onCommit(PANEL_DEFAULT)}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
@@ -207,7 +227,15 @@ export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWi
       }}
     >
       <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-primary/60 group-focus-visible:bg-primary" />
-      <span className="absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/30 opacity-0 transition-opacity group-hover:opacity-100 group-hover:bg-primary" />
+      {/* the grip is always there, so it is clear this edge can be dragged */}
+      <span
+        data-grip
+        className="absolute top-1/2 left-1/2 flex h-12 w-2.5 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border bg-card shadow-sm transition-colors group-hover:border-primary group-hover:bg-primary group-focus-visible:border-primary group-focus-visible:bg-primary"
+      >
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="size-0.5 rounded-full bg-muted-foreground group-hover:bg-primary-foreground group-focus-visible:bg-primary-foreground" />
+        ))}
+      </span>
     </div>
   );
 }

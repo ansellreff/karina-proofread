@@ -83,4 +83,8 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - Tracked changes and comments are authored `Karina Octavia`; no bot/AI trace in the docx or its metadata.
 - Karina's notes to students are tracked inline insertions in parentheses, not Word comments.
 - Suggestions are red on screen only (`--track-change-text` in `globals.css`, like Word's author colour); never write a red `w:color` into the docx (it would stay red after accepting).
-- Download names come from Settings → Export file name (`settings.fileName`, `lib/naming.ts`: blocks + separator, `normalizeFormat` on save and use). Default `DONE_<first name>_<type>_<YYYYMMDD>`; the clean copy has the same name.
+- Download names come from Settings → Export file name (`settings.fileName`, `lib/naming.ts`: blocks + separator, `normalizeFormat` on save and use). Default `DONE_<type>_<first name>_<YYYYMMDD>` (a saved copy of the old `DONE_<name>_<type>_<date>` default reads as the new one, `getSettings`); the clean copy has the same name. The student's name comes from the document (`detectName`) or the file name (`guessNameFromFile`: skips doc types, dates/numbers, DONE/V2…).
+
+## Review page
+- Review bar (`workspace/review-bar.tsx`): Previous/Next over the open changes in document order (`openInOrder`: bot cards + `ownChanges`, one card per tracked change the bot didn't make), Accept/Reject the highlighted one, Track my edits (Suggesting/Editing), Formatting marks (hidden by default: `data-format-marks` sets SuperDoc's format-border token transparent).
+- Page width: fit-width up to 200% and `[data-pane] .superdoc__layers { width: 100% }` (otherwise SuperDoc measures the page, not the column). `refitZoom` flips the mode manual→fit; `ZoomBar` ignores mode-only events so a re-fit isn't saved as her zoom. `PanelResizer` drags with window listeners (pointer capture got cancelled by the editors side by side).

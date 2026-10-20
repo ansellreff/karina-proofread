@@ -113,6 +113,21 @@ const sample0 = JSON.stringify((tl?.items ?? []).slice(0, 3).map((i) => ({ id: i
 console.log("   sample tracked items:", sample0.slice(0, 600));
 const openText = await page.getByText(/bot changes still open/).first().textContent().catch(() => null);
 check("changes panel links bot changes to the editor", !!openText && !/^0 of/.test(openText), openText ?? "panel text missing");
+// the review bar hides the formatting marks (gold underlines) by default and shows them on request
+{
+  const bar = page.locator("[data-review-bar]");
+  const fmtColor = () => page.evaluate(() => {
+    const e = document.querySelector('[data-pane="review"] .track-format-dec.highlighted');
+    return e ? getComputedStyle(e).borderBottomColor : "none";
+  });
+  const hidden = await fmtColor();
+  await bar.getByRole("button", { name: "Formatting marks" }).click();
+  await page.waitForTimeout(300);
+  const shown = await fmtColor();
+  await bar.getByRole("button", { name: "Formatting marks" }).click();
+  await page.waitForTimeout(300);
+  check("formatting marks: hidden by default, the review bar shows them again", hidden === "rgba(0, 0, 0, 0)" && shown !== "none" && shown !== hidden && (await fmtColor()) === hidden, `${hidden} -> ${shown}`);
+}
 await page.screenshot({ path: path.join(out, "02-review-desktop.png") });
 
 // 4. accept one change from the panel
@@ -288,7 +303,7 @@ await page.waitForTimeout(600);
 const hidden = await page.getByRole("button", { name: "Show the review panel" }).isVisible();
 await page.getByRole("button", { name: "Show the review panel" }).click();
 await page.waitForTimeout(600);
-const edgeBox = await page.getByRole("separator", { name: "Resize the review panel" }).boundingBox();
+const edgeBox = await page.getByRole("separator", { name: "Resize the document and the review panel" }).boundingBox();
 await page.mouse.move(edgeBox.x + edgeBox.width / 2, 500);
 await page.mouse.down();
 await page.mouse.move(edgeBox.x - 120, 500, { steps: 6 });
@@ -296,6 +311,20 @@ await page.mouse.up();
 await page.waitForTimeout(600);
 const asideW = await page.locator("aside").first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
 check("review panel: can be hidden, shown again and resized", hidden && asideW > 450 && (await editorKept()), `panel ${asideW}px`);
+// the document's edge has a visible grip; dragging it makes the document (and its page) wider
+{
+  const pageW = () => page.locator('[data-pane="review"] .superdoc-page').first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
+  const gripShown = await page.locator("[data-grip]").isVisible();
+  const pw0 = await pageW();
+  const sep2 = await page.getByRole("separator", { name: "Resize the document and the review panel" }).boundingBox();
+  await page.mouse.move(sep2.x + sep2.width / 2, 500);
+  await page.mouse.down();
+  await page.mouse.move(sep2.x + 260, 500, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(1200);
+  const pw1 = await pageW();
+  check("document edge: a visible grip; dragging it makes the page wider", gripShown && pw1 > pw0 + 40 && (await editorKept()), `grip ${gripShown}, page ${pw0}px -> ${pw1}px`);
+}
 
 // 4c. zoom in each pane (Word-style), folded into a small icon until hovered: + / slider / Ctrl+wheel / fit width
 {
@@ -394,6 +423,59 @@ const textAfter = await page.evaluate(() => document.querySelector(".superdoc-pa
 await page.keyboard.press("Backspace");
 check("shortcuts: typing a letter in the document stays text", textAfter === textBefore + 1 && (await activeKeyNow()) === kBefore, `${textBefore} -> ${textAfter}`);
 
+// 4e2. review bar: Next/Previous through the open changes in document order, Accept from the bar (Undo brings it back)
+{
+  const bar = page.locator("[data-review-bar]");
+  const barText = async () => ((await bar.locator("p").first().textContent()) ?? "").trim();
+  const at = (t) => (/Change (\d+) of (\d+)/.exec(t) ?? []).slice(1).map(Number);
+  await page.locator("aside").getByText(/bot changes still open/).first().click(); // focus out of the document
+  await bar.getByRole("button", { name: "Next change" }).click();
+  await page.waitForTimeout(900);
+  const t1 = await barText();
+  await bar.getByRole("button", { name: "Next change" }).click();
+  await page.waitForTimeout(900);
+  const t2 = await barText();
+  await bar.getByRole("button", { name: "Previous change" }).click();
+  await page.waitForTimeout(900);
+  const t3 = await barText();
+  const [p1, n1] = at(t1);
+  const [p2] = at(t2);
+  const [p3] = at(t3);
+  const cardActive = (await page.locator("aside li[aria-current]").count()) === 1;
+  check("review bar: Next and Previous step through the open changes (x of y)", n1 >= 2 && p2 === (p1 % n1) + 1 && p3 === p1 && cardActive, `${t1} | ${t2} | ${t3}`);
+  const openB = await openLine();
+  await bar.getByRole("button", { name: "Accept", exact: true }).click();
+  const openA = await waitChange(openB);
+  await page.waitForTimeout(600);
+  const [, nA] = at(await barText());
+  await panel.getByRole("button", { name: "Undo", exact: true }).click();
+  const openU = await waitChange(openA);
+  check("review bar: Accept resolves the highlighted change and moves on; Undo brings it back", openA !== openB && (nA ?? n1 - 1) === n1 - 1 && openU === openB, `${openB} -> ${openA} -> ${openU}; ${n1} -> ${nA}`);
+
+  // your own edit (Suggesting mode) is a card of its own, with Accept / Reject
+  await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+  await page.keyboard.type("Zqx");
+  await page.waitForTimeout(1500);
+  const ownCard = panel.locator("li[data-change-key^='own:']").filter({ hasText: "Your edit" });
+  const ownShown = (await ownCard.count()) >= 1 && (await panel.getByRole("tab", { name: /^Your edits \d/ }).count()) === 1;
+  const summary = await openLine();
+  await ownCard.last().hover();
+  await ownCard.last().getByRole("button", { name: /^Reject/ }).click();
+  await page.waitForTimeout(1500);
+  const ownGone = (await panel.locator("li[data-change-key^='own:']").count()) === 0;
+  check("your own edits show in What changed (Your edit), and can be rejected there", ownShown && /of your edits/.test(summary ?? "") && ownGone, `${summary}; shown ${ownShown}, gone ${ownGone}`);
+
+  // Track my edits: on = Suggesting, off = Editing
+  await bar.getByRole("switch", { name: "Track my edits" }).click();
+  await page.waitForTimeout(400);
+  const editing = await page.getByRole("radio", { name: "Editing" }).getAttribute("aria-checked");
+  await bar.getByRole("switch", { name: "Track my edits" }).click();
+  await page.waitForTimeout(400);
+  const suggesting = await page.getByRole("radio", { name: "Suggesting" }).getAttribute("aria-checked");
+  check("review bar: Track my edits switches between Suggesting and Editing", editing === "true" && suggesting === "true", `${editing}/${suggesting}`);
+  await page.screenshot({ path: path.join(out, "02g-review-bar.png") });
+}
+
 // 4f. rename the student from the review page (used in the exported file names)
 await page.getByRole("button", { name: /Rename the student/ }).or(page.getByTitle(/Rename the student/)).first().click();
 await page.getByRole("textbox", { name: "Student’s name" }).fill("Ereview Tester");
@@ -444,13 +526,13 @@ const cleanZip = await JSZip.loadAsync(new Uint8Array(await cleanRes.arrayBuffer
 const cleanXml = await cleanZip.file("word/document.xml").async("string");
 const disposition = cleanRes.headers.get("content-disposition") ?? "";
 check("clean export: no tracked changes or comments", !/<w:(ins|del|rPrChange|pPrChange|commentReference)\b/.test(cleanXml) && !cleanZip.file("word/comments.xml"));
-check("export uses Karina's file naming (clean copy: same name, no ending added)", /DONE_[^_]+_Study Plan_\d{8}\.docx/.test(decodeURIComponent(disposition)), disposition);
+check("export uses Karina's file naming DONE_type_name_date (clean copy: same name)", /DONE_Study Plan_[^_]+_\d{8}\.docx/.test(decodeURIComponent(disposition)), disposition);
 
 // Settings → Export file name: change the blocks, save, and the download follows; her own setting is put back after
 {
   const before = (await (await fetch(`${base}/api/settings`)).json()).settings.fileName;
   const putName = (fileName) => fetch(`${base}/api/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName }) });
-  await putName({ parts: [{ kind: "text", text: "DONE" }, { kind: "firstName" }, { kind: "docType" }, { kind: "date", format: "YYYYMMDD" }], separator: "_" });
+  await putName({ parts: [{ kind: "text", text: "DONE" }, { kind: "docType" }, { kind: "firstName" }, { kind: "date", format: "YYYYMMDD" }], separator: "_" });
   const sp = await newPage({ width: 1280, height: 900 });
   try {
     await sp.goto(`${base}/settings`);

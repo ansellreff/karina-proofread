@@ -783,3 +783,53 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - in Settings: remove a block, change the date format, add text (an unsafe "?" is left out), choose the dash, drag a block to the front, then save; the download is then named that way.
   - Her own setting is put back after the test.
 - Screenshots of the new section checked on desktop (light) and phone (dark).
+
+## Review bar for tracked changes, file-name fix, resizable document
+**Request:**
+- tracked changes were hard to navigate and edit;
+- a file named `Study Plan_<name>_<submission date>` exported with the date in place of the name;
+- the default name should be `DONE_<type>_<name>_<date>`;
+- the document panel couldn't be resized.
+
+### Tracked changes
+- **Review bar** above the document (desktop and tablet), like Word's Review tab:
+  - **‹ Change 3 of 12 ›** steps through every open change in document order: the bot's, hers, and any already in the file. J/K do the same.
+  - The bar shows a short line for the highlighted change, for example "Fix: my self → myself".
+  - **Accept / Reject** decide the highlighted change, then move to the next one. The panel's Undo and the A/R keys still work, and Accept all / Reject all are in the small menu next to them.
+  - **Track my edits** switches between Suggesting (on) and Editing (off).
+- **Formatting marks hidden by default:**
+  - The bot's font/size/spacing changes had put a gold underline on almost every line. The bar's **Formatting marks** button (with the count) shows them again, and the choice is remembered.
+  - While hidden, the bar skips them. They stay in the file and in the panel's Formatting card.
+- **Her own edits in "What changed":**
+  - Every tracked change she makes in Suggesting mode is now a card, **Your edit** (or "Edit by …" for someone else's), with the old and new text, **Accept / Reject**, and click-to-jump. The **Your edits** filter shows only those.
+  - The panel says "2 of 4 bot changes still open, plus 1 of your edits", and Accept all / Reject all include them.
+- **Found and fixed:** stepping back to a replaced word (old text struck, new text added) sometimes left the highlight on the previous change.
+
+### Export file name
+- **The cause:** for a file name that starts with the document type, the app took the *last* part as the name, which was the submission date (`Study Plan_Ruddy_20261005` → "20261005").
+- **Now:** dates and numbers (`20261005`, `2026-10-05`, `05.10.2026`) and words like DONE, FINAL, REVISED or V2 are skipped, so the example gives **Ruddy**. A name written in the document itself ("My name is…", "Name: …") still comes first.
+- **Documents already in the app** whose saved name is only a date get the name again from the file name.
+- **New default `DONE_<type>_<name>_<date>`,** for example `DONE_Study Plan_Ruddy_20261021.docx`. Her saved setting was still the old default, so it switched automatically (on this PC, and online the first time it's read). A name format she customises is kept. The Settings reset button reads "Back to DONE_Type_Name_Date".
+
+### Resizable document
+- **Visible handle:** the edge between the document and the review panel now always shows a grip, with a wider area to grab. It drags the document wider or narrower; the panel can go from 260 px up to 70% of the screen. Double-click resets.
+- **The page follows:**
+  - The page now grows with the document, up to 200%, instead of stopping at 100% and leaving grey space.
+  - **Found and fixed:** the editor measured the page instead of the column, so the page could only shrink and sat flush left. It now fills the column and is centred.
+  - A zoom she picks with the zoom icon is kept. **Fit page width** goes back to following the handle.
+- **Found and fixed:**
+  - side by side, the drag stopped after a few pixels (the editor next to it took the mouse over); it now follows the mouse until released;
+  - each automatic re-fit was saved as if she had chosen a zoom, which froze the page size.
+
+### Verified
+- 83 unit tests (new: her file-name example, dates/numbers skipped, old names corrected, the settings switch), lint and type check pass.
+- Full end-to-end test (Word sample): **62/62**. New checks:
+  - formatting marks hidden by default and shown by the bar;
+  - Next/Previous with "x of y";
+  - Accept from the bar, and Undo;
+  - her own edit shown as a card and rejected from it;
+  - Track my edits;
+  - the visible grip makes the page wider when dragged;
+  - the new default export name.
+- Screenshots checked in light and dark, desktop, side by side and phone.
+- Only test documents made by the tests were removed; her 6 documents are unchanged.

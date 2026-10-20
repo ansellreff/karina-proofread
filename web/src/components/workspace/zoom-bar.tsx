@@ -37,6 +37,8 @@ export function ZoomBar({ which, superdoc, ready, pane, partner }: { which: "rev
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const partnerRef = useRef(partner);
   const prefRef = useRef(pref);
+  /** Last zoom seen: a re-fit flips the mode to manual and back without changing it, which is not a choice of Karina's. */
+  const lastValue = useRef<number | null>(null);
   useEffect(() => {
     partnerRef.current = partner;
     prefRef.current = pref;
@@ -46,8 +48,12 @@ export function ZoomBar({ which, superdoc, ready, pane, partner }: { which: "rev
   useEffect(() => {
     const sd = superdoc();
     if (!sd) return;
+    lastValue.current = zoomState(sd)?.value ?? null;
     const off = onZoom(sd, (next) => {
       setZ(next);
+      const changed = next.value !== lastValue.current;
+      lastValue.current = next.value;
+      if (!changed) return; // only the mode flipped (a re-fit), nothing to remember or copy
       // a zoom set on this pane (here, or copied from the other side) is remembered for this pane
       if (next.mode === "manual" && prefRef.current !== next.value) setPref(next.value);
       // linked: chosen zooms go across both ways; the review side also carries its automatic fits

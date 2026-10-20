@@ -20,8 +20,8 @@ export interface DocEditorProps {
   onError?: (message: string) => void;
 }
 
-/** Pages shrink to fit narrow screens (phones) and never grow past 100% on wide ones. */
-const ZOOM = { mode: "fit-width" as const, fitWidth: { max: 100, padding: 16 } };
+/** Pages follow the document column: smaller when it narrows, bigger (up to 200%) when Karina drags it wider. */
+const ZOOM = { mode: "fit-width" as const, fitWidth: { max: 200, padding: 16 } };
 const WEB_LAYOUT = { layout: "web" as const };
 
 /** SuperDoc Word editor. Telemetry is off: nothing about the student's document leaves this app. */
