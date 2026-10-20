@@ -851,3 +851,28 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - typing checks now type at the start of the document and read the result from the editor;
   - they wait for the shortcuts dialog to close, and for the editor to take the focus after an undo.
 - **The app now holds the jump target briefly:** after a jump (review bar, panel, J/K), the editor's own "active change" report is ignored for about a second, so the highlight no longer jumps back.
+
+## New logo, and resizable balloons
+**Request:** use the logo in the `weblogo` folder; make the edge between the page and the balloons adjustable too.
+
+### Logo
+- **Where it shows:**
+  - the header (instead of the "K" box), on a light round ground so its navy outlines show in dark mode too;
+  - the browser tab;
+  - the phone home-screen icons (Android and iPhone).
+- **What changed in the image:**
+  - **Small copies:** made from the 2000 px PNG (4–69 KB each instead of 2.4 MB) by `web/scripts/make-icons.mjs`.
+  - **Figure only:** the PNG has the words "KARINA PROOFREAD BOT" in black under the figure. They can't be read at icon size and vanish on dark backgrounds, so the icons show the figure only. The header writes "Karina Proofread" next to it anyway.
+- **The old "K" icon** is removed (still in git history).
+
+### Resizable balloons
+- **The handle:** with balloons shown, the edge between the page and the balloons column has the same grip as the panel edge. Drag it to make the balloons wider (the page gets smaller) or narrower (the page gets bigger), between 240 and 640 px, always leaving the page at least 320 px. Double-click goes back to 320 px. The width is remembered.
+- **The cards fill the column**, so long changes need fewer lines when it is wide.
+- **Found and fixed:** the page didn't refit when only the balloons changed width (or other things beside the page). The editor ignored a refit made within one moment; it now takes two frames.
+
+### Verified
+- 83 unit tests, lint and type check pass.
+- Full end-to-end test: **65/65**. New checks:
+  - dragging the balloons edge widens the column, the page makes room, and double-click resets it;
+  - the logo loads in the header on its light ground in dark mode, and serves as the browser-tab icon.
+- Screenshots checked in light and dark.

@@ -33,7 +33,7 @@ import type { Job } from "@/lib/store/types";
 import { canLocate, ChangesPanel, type PanelChange } from "./changes-panel";
 import { OriginalPane } from "./original-pane";
 import { ScorePanel, scoreTone, type Scores } from "./score-panel";
-import { DropZones, PANEL_DEFAULT, PANEL_MAX_SHARE, PANEL_MIN, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePreference, type PaneView } from "./split-view";
+import { BalloonResizer, BALLOONS_DEFAULT, DropZones, PANEL_DEFAULT, PANEL_MAX_SHARE, PANEL_MIN, PaneHeader, PanelResizer, SplitDivider, usePaneDrag, usePreference, type PaneView } from "./split-view";
 import { useLinkedScroll } from "./use-linked-scroll";
 import type { Mode } from "./doc-editor";
 import { ProofreadDialog } from "./proofread-dialog";
@@ -214,6 +214,11 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   const [savedPanelWidth, savePanelWidth] = usePreference("panel-width", PANEL_DEFAULT);
   const [livePanelWidth, setLivePanelWidth] = useState<number | null>(null); // while dragging its edge
   const panelWidth = livePanelWidth ?? savedPanelWidth;
+  /** Width of the Word-style balloons column beside the page (remembered; live while its edge is dragged). */
+  const [savedBalloonWidth, saveBalloonWidth] = usePreference("balloons-width", BALLOONS_DEFAULT);
+  const [liveBalloonWidth, setLiveBalloonWidth] = useState<number | null>(null);
+  const balloonWidth = liveBalloonWidth ?? savedBalloonWidth;
+  const reviewBox = useRef<HTMLDivElement>(null);
   const swapSides = () => setOriginalSide(originalSide === "left" ? "right" : "left");
   // drag a side by its title bar: dropping the original on a half puts it there; the review goes opposite
   const { drag: paneDrag, handlers: paneDragHandlers } = usePaneDrag({
@@ -230,7 +235,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     };
     const t = setTimeout(fit, 120);
     return () => clearTimeout(t);
-  }, [sideBySide, phone, paneTick, savedRatio, panelOpen, panelWidth]);
+  }, [sideBySide, phone, paneTick, savedRatio, panelOpen, panelWidth, balloonWidth]);
 
   // ---- load the requested version into the editor
   useEffect(() => {
@@ -981,7 +986,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             />
           )}
           {/* clipped: balloons beside the page must not spill over the review bar above */}
-          <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div ref={reviewBox} className="relative min-h-0 flex-1 overflow-hidden" style={{ "--balloons-width": `${balloonWidth}px` } as React.CSSProperties}>
           {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
           {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
           {editorError ? (
@@ -1010,6 +1015,12 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             />
           ) : (
             <EditorPlaceholder text="Opening the document…" />
+          )}
+          {!phone && file && !editorError && balloons && (
+            <BalloonResizer box={reviewBox} width={balloonWidth} onWidth={setLiveBalloonWidth} onCommit={(w) => {
+              setLiveBalloonWidth(null);
+              saveBalloonWidth(w);
+            }} />
           )}
           {!phone && file && !editorError && <ZoomBar which="review" superdoc={getReviewSd} ready={paneTick} pane={reviewPane} partner={sideBySide && scrollLock ? getOriginalSd : undefined} />}
           </div>

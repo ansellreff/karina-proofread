@@ -30,6 +30,7 @@
   --color-ins: var(--ins);
   --color-del: var(--del);
   --color-mark: var(--mark);
+  --color-logo: var(--logo);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -63,6 +64,8 @@
   --mark: #f5e27a;
   --mark-foreground: #5c4a00;
   --shadow-color: 30 36 48;
+  /* behind the logo: its navy outlines need a light ground in both themes */
+  --logo: #ffffff;
   --radius: 0.5rem;
   color-scheme: light;
 }
@@ -92,6 +95,7 @@
   --mark: #b8962a;
   --mark-foreground: #f2dc8c;
   --shadow-color: 0 0 0;
+  --logo: #eef0f5;
   color-scheme: dark;
 }
 
@@ -236,6 +240,20 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
 .superdoc-layout :is(.track-insert-dec, .track-delete-dec).highlighted,
 .superdoc-web-flow-run:is(.track-insert-dec, .track-delete-dec).highlighted {
   color: var(--track-change-text) !important;
+}
+
+/* Balloons column (SuperDoc's right sidebar): as wide as Karina drags it (--balloons-width, set on the review pane);
+   the cards fill it. SuperDoc measures the column when it fits the page, so the page makes room. */
+[data-pane] .superdoc__right-sidebar {
+  width: var(--balloons-width, 320px) !important;
+  min-width: var(--balloons-width, 320px) !important;
+}
+[data-pane] .superdoc__right-sidebar :is(.floating-comments, .sidebar-container, .comment-placeholder) {
+  width: calc(var(--balloons-width, 320px) - 20px) !important;
+  min-width: 0 !important;
+}
+[data-pane] .superdoc__right-sidebar .floating-comment {
+  min-width: 0 !important;
 }
 
 /* Review bar → Formatting marks off (the default): formatting changes keep no gold underline or margin bar, so the

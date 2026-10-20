@@ -280,12 +280,23 @@ export function onZoom(sd: unknown, fn: (z: ZoomState) => void): () => void {
  * Back to SuperDoc's own fit-to-width (one page per screen), after a column was resized. A zoom Karina chose
  * herself (manual) is kept.
  */
+/**
+ * Fit the page to its column again (after the column or the balloons beside the page changed size). SuperDoc refits
+ * when its width changes or when the mode turns to fit-width; a flip within one tick is merged away by its watcher,
+ * so the mode goes back to fit-width a frame later.
+ */
 export function refitZoom(sd: unknown) {
   try {
     if (zoomState(sd)?.mode === "manual") return;
     const zoom = sdOf(sd)?.ui?.zoom;
     zoom?.setMode?.("manual");
-    zoom?.setMode?.("fit-width");
+    requestAnimationFrame(() => {
+      try {
+        zoom?.setMode?.("fit-width");
+      } catch {
+        /* ignore */
+      }
+    });
   } catch {
     /* ignore */
   }

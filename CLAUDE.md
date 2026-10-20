@@ -25,7 +25,7 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; dev server must run)
 - `cd web; node scripts/seed.mjs <files> [--ai] [--no-proofread]` — load .docx/.pdf documents into the local app
 - `cd web; npx tsx scripts/pdf-to-docx.ts <file.pdf> --out <dir> [--text]` — check PDF→Word conversion (`lib/pdf/pdf-to-docx.ts`, pdf.js)
-- `cd web; node scripts/make-icons.mjs` — re-render the phone-install icons from `src/app/icon.svg`
+- `cd web; node scripts/make-icons.mjs` — re-render the logo and icons (header `public/icons/logo.png`, tab `src/app/icon.png`, phone install) from Karina's `weblogo/karinabotlogo.png` (figure only: the words under it are cut off)
 - `cd web; node scripts/shots.mjs <jobId> <outDir> [--dark-only] [--paper dark]` — screenshots of every screen, light/dark, desktop/phone (design review)
 
 ## Theme
@@ -87,5 +87,5 @@ Private web app that proofreads student enrollment documents (study plans, autob
 
 ## Review page
 - Review bar (`workspace/review-bar.tsx`): Previous/Next over the open changes in document order (`openInOrder`: bot cards + `ownChanges`, one card per tracked change the bot didn't make), Accept/Reject the highlighted one, Track my edits (Suggesting/Editing), Formatting marks (hidden by default: `data-format-marks` sets SuperDoc's format-border token transparent).
-- Balloons (review bar, `usePreference("balloons")`, default on): `DocEditor balloons` → `ui.comments` `{ layout: "auto", responsive: { breakpoint: BALLOON_MIN_WIDTH } }` (column beside the page when wide, card on click when narrow), off → `"inline"`. SuperDoc reads it only at mount, so the toggle remounts the editor (key) after saving unsaved edits. Formatting balloons (`.comment-placeholder[data-comment-id*="|formatting"]`) collapse to 1 px while formatting marks are hidden — not `display:none`, SuperDoc stacks hidden cards at 110 px.
+- Balloons (review bar, `usePreference("balloons")`, default on): `DocEditor balloons` → `ui.comments` `{ layout: "auto", responsive: { breakpoint: BALLOON_MIN_WIDTH } }` (column beside the page when wide, card on click when narrow), off → `"inline"`. SuperDoc reads it only at mount, so the toggle remounts the editor (key) after saving unsaved edits. Balloon column width: `--balloons-width` on the review box (`BalloonResizer` in `split-view.tsx`, remembered). Formatting balloons (`.comment-placeholder[data-comment-id*="|formatting"]`) collapse to 1 px while formatting marks are hidden — not `display:none`, SuperDoc stacks hidden cards at 110 px.
 - Page width: fit-width up to 200% and `[data-pane] .superdoc__layers { width: 100% }` (otherwise SuperDoc measures the page, not the column). `refitZoom` flips the mode manual→fit; `ZoomBar` ignores mode-only events so a re-fit isn't saved as her zoom. `PanelResizer` drags with window listeners (pointer capture got cancelled by the editors side by side).

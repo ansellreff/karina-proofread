@@ -560,6 +560,21 @@ check("save status shows when it was saved", saveStatus);
   await zbar.getByRole("button", { name: "Fit page width" }).click();
   await page.waitForTimeout(1500);
   const on = await balloonInfo();
+  // the edge between the page and the balloons can be dragged: wider balloons, smaller page, still side by side
+  const columnW = () => page.evaluate(() => Math.round(document.querySelector('[data-pane="review"] .superdoc__right-sidebar')?.getBoundingClientRect().width ?? 0));
+  const bsep = page.getByRole("separator", { name: "Resize the balloons" });
+  const bw0 = await columnW();
+  const bbox = await bsep.boundingBox();
+  await page.mouse.move(bbox.x + bbox.width / 2, 500);
+  await page.mouse.down();
+  await page.mouse.move(bbox.x - 120, 500, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(1500);
+  const bw1 = await columnW();
+  const afterResize = await balloonInfo();
+  await bsep.dblclick(); // back to the default width
+  await page.waitForTimeout(1200);
+  check("balloons: the edge between the page and the balloons can be dragged (the page makes room)", bw1 > bw0 + 80 && afterResize.clear && (await columnW()) === 320, `column ${bw0}px -> ${bw1}px, clear ${afterResize.clear}, reset ${await columnW()}px`);
   await bar.getByRole("button", { name: "Balloons" }).click();
   await page.waitForFunction(() => !!document.querySelector('[data-pane="review"] .superdoc-page'), null, { timeout: 60000 });
   await page.waitForTimeout(3500);
@@ -822,6 +837,13 @@ try {
   await tp.waitForTimeout(500);
   const dp2 = await look();
   check("dark mode: app and editor toolbar dark, page stays white; dark paper inverts the page", d.dark && d.body === "rgb(17, 20, 27)" && d.paper === "rgb(255, 255, 255)" && d.toolbar === "#191d26" && d.filter === "none" && dp2.filter.includes("invert"), JSON.stringify({ ...d, darkPaper: dp2.filter }));
+  // the header logo (Karina's PNG) loads, on a light round ground so its navy outlines show in dark mode too
+  const logo = await tp.evaluate(() => {
+    const img = document.querySelector('header a[aria-label^="Karina Proofread"] img');
+    return { loaded: !!img && img.complete && img.naturalWidth > 0, src: img?.getAttribute("src"), ground: img ? getComputedStyle(img.parentElement).backgroundColor : null };
+  });
+  const icon = await fetch(`${base}/icon.png`).then((r) => r.ok && r.headers.get("content-type")?.includes("png")).catch(() => false);
+  check("logo: Karina's logo in the header (light ground in dark mode) and as the browser-tab icon", logo.loaded && logo.ground === "rgb(238, 240, 245)" && icon, JSON.stringify({ ...logo, icon }));
   await tp.goto(`${base}/jobs/${job.id}/print?v=1&markup=0`);
   await tp.waitForTimeout(1500);
   const printLight = await tp.evaluate(() => !document.documentElement.classList.contains("dark"));

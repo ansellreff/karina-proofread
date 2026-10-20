@@ -178,16 +178,17 @@ const panelMax = () => Math.max(PANEL_MIN, Math.round(window.innerWidth * PANEL_
  * The edge between the document and the review panel: always shown as a grip, drag it to make the document wider
  * or narrower (the page follows, see doc-editor ZOOM). Arrow keys nudge; double-click resets.
  */
-export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWidth: (w: number) => void; onCommit: (w: number) => void }) {
-  const clamp = (w: number) => Math.min(panelMax(), Math.max(PANEL_MIN, Math.round(w)));
-  const at = (clientX: number) => clamp(window.innerWidth - clientX);
-  const latest = useRef({ onWidth, onCommit });
+/**
+ * A drag that follows the mouse over the whole window: with pointer capture alone, the editors next to a handle
+ * (side by side) took the pointer over mid-drag and the browser cancelled it after a few pixels. A pointercancel
+ * from a neighbour is ignored; the drag ends when the button is released.
+ */
+function useWindowDrag(at: (clientX: number) => number, onWidth: (w: number) => void, onCommit: (w: number) => void) {
+  const latest = useRef({ at, onWidth, onCommit });
   useEffect(() => {
-    latest.current = { onWidth, onCommit };
+    latest.current = { at, onWidth, onCommit };
   });
-  // The drag follows the mouse over the whole window: with pointer capture alone, the editors next to it (side by
-  // side) took the pointer over mid-drag and the browser cancelled it after a few pixels.
-  const start = (e: React.PointerEvent) => {
+  return (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault(); // no text selection or native drag while resizing
     let last = e.clientX;
@@ -195,18 +196,39 @@ export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWi
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       document.body.style.removeProperty("cursor");
-      latest.current.onCommit(at(last));
+      latest.current.onCommit(latest.current.at(last));
     };
-    // a pointercancel from a neighbour is ignored; the drag ends when the button is released
     function move(ev: PointerEvent) {
       if (ev.buttons === 0) return end();
       last = ev.clientX;
-      latest.current.onWidth(at(last));
+      latest.current.onWidth(latest.current.at(last));
     }
     document.body.style.cursor = "col-resize";
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
   };
+}
+
+/** The always-visible grip on a draggable edge (with a line on hover), so it is clear the edge can be dragged. */
+function EdgeGrip() {
+  return (
+    <>
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-primary/60 group-focus-visible:bg-primary" />
+      <span
+        data-grip
+        className="absolute top-1/2 left-1/2 flex h-12 w-2.5 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border bg-card shadow-sm transition-colors group-hover:border-primary group-hover:bg-primary group-focus-visible:border-primary group-focus-visible:bg-primary"
+      >
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="size-0.5 rounded-full bg-muted-foreground group-hover:bg-primary-foreground group-focus-visible:bg-primary-foreground" />
+        ))}
+      </span>
+    </>
+  );
+}
+
+export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWidth: (w: number) => void; onCommit: (w: number) => void }) {
+  const clamp = (w: number) => Math.min(panelMax(), Math.max(PANEL_MIN, Math.round(w)));
+  const start = useWindowDrag((clientX) => clamp(window.innerWidth - clientX), onWidth, onCommit);
   return (
     <div
       role="separator"
@@ -226,16 +248,84 @@ export function PanelResizer({ width, onWidth, onCommit }: { width: number; onWi
         }
       }}
     >
-      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-primary/60 group-focus-visible:bg-primary" />
-      {/* the grip is always there, so it is clear this edge can be dragged */}
-      <span
-        data-grip
-        className="absolute top-1/2 left-1/2 flex h-12 w-2.5 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border bg-card shadow-sm transition-colors group-hover:border-primary group-hover:bg-primary group-focus-visible:border-primary group-focus-visible:bg-primary"
-      >
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="size-0.5 rounded-full bg-muted-foreground group-hover:bg-primary-foreground group-focus-visible:bg-primary-foreground" />
-        ))}
-      </span>
+      <EdgeGrip />
+    </div>
+  );
+}
+
+export const BALLOONS_MIN = 240;
+export const BALLOONS_MAX = 640;
+export const BALLOONS_DEFAULT = 320;
+/** The page keeps at least this much room next to the balloons. */
+const PAGE_ROOM = 320;
+
+/**
+ * The edge between the page and the Word-style balloons column (SuperDoc's right sidebar, sized by
+ * `--balloons-width` in globals.css). Drawn over the editor at the column's left edge, only while the column is shown.
+ */
+export function BalloonResizer({ box, width, onWidth, onCommit }: { box: RefObject<HTMLElement | null>; width: number; onWidth: (w: number) => void; onCommit: (w: number) => void }) {
+  const [left, setLeft] = useState<number | null>(null);
+  const measureRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const column = el.querySelector<HTMLElement>(".superdoc--with-sidebar .superdoc__right-sidebar");
+        if (!column) return setLeft(null);
+        setLeft(Math.round(column.getBoundingClientRect().left - el.getBoundingClientRect().left));
+      });
+    };
+    measureRef.current = measure;
+    measure();
+    // the column comes and goes (balloons on/off, narrow column) and moves with resizing and horizontal scrolling
+    const resize = new ResizeObserver(measure);
+    resize.observe(el);
+    const changes = new MutationObserver(measure);
+    changes.observe(el, { childList: true, subtree: true });
+    el.addEventListener("scroll", measure, { capture: true, passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      changes.disconnect();
+      el.removeEventListener("scroll", measure, { capture: true });
+    };
+  }, [box]);
+  useEffect(() => measureRef.current(), [width]);
+
+  const max = () => Math.max(BALLOONS_MIN, Math.min(BALLOONS_MAX, (box.current?.clientWidth ?? 1200) - PAGE_ROOM));
+  const clamp = (w: number) => Math.min(max(), Math.max(BALLOONS_MIN, Math.round(w)));
+  // the column's right edge stays put: its width is the distance from the pointer to that edge
+  const right = () => {
+    const el = box.current;
+    const column = el?.querySelector<HTMLElement>(".superdoc--with-sidebar .superdoc__right-sidebar");
+    return column ? column.getBoundingClientRect().right : (el?.getBoundingClientRect().right ?? window.innerWidth);
+  };
+  const start = useWindowDrag((clientX) => clamp(right() - clientX), onWidth, onCommit);
+  if (left === null) return null;
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the balloons"
+      aria-valuemin={BALLOONS_MIN}
+      aria-valuenow={width}
+      tabIndex={0}
+      title="Drag to make the balloons wider or narrower (double-click to reset)"
+      style={{ left: left - 6 }}
+      className="group no-print absolute inset-y-0 z-20 w-3 cursor-col-resize touch-none outline-none"
+      onPointerDown={start}
+      onDoubleClick={() => onCommit(BALLOONS_DEFAULT)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          onCommit(clamp(width + (e.key === "ArrowLeft" ? 30 : -30)));
+        }
+      }}
+    >
+      <EdgeGrip />
     </div>
   );
 }
