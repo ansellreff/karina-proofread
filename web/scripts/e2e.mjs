@@ -410,18 +410,61 @@ const openAfterU = await waitChange(openAfterA);
 await page.keyboard.press("?");
 const helpShown = await page.getByRole("dialog", { name: "Keyboard shortcuts" }).isVisible().catch(() => false);
 await page.keyboard.press("Escape");
+// the dialog gives the focus back after its closing animation: let it, before clicking into the document
+await page.getByRole("dialog", { name: "Keyboard shortcuts" }).waitFor({ state: "hidden" }).catch(() => {});
+await page.waitForTimeout(500);
 check("shortcuts: J moves to a change, A accepts, U undoes, ? lists them", k1 !== k0 && openAfterA !== openAtJ && openAfterU === openAtJ && helpShown, `${k0} -> ${k1}; ${openBefore} / ${openAfterA} / ${openAfterU}; help ${helpShown}`);
 // typing "j" inside the document is text, not a shortcut
-await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+/** A point in the student's own text (not inside a tracked change), wherever the page is drawn at this zoom. */
+const plainTextPoint = () => page.evaluate(() => {
+  for (const el of document.querySelectorAll('[data-pane="review"] .superdoc-page span')) {
+    if (el.childElementCount || (el.textContent ?? "").trim().length < 30 || el.closest(".track-insert-dec, .track-delete-dec")) continue;
+    const r = el.getBoundingClientRect();
+    if (r.top > 260 && r.bottom < window.innerHeight - 80 && r.width > 120) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  return null;
+});
+const clickPlainText = async () => {
+  let pt = await plainTextPoint();
+  if (!pt) {
+    // scrolled to a change: go back to the top of the document, where the student's text starts
+    await page.evaluate(() => {
+      const s = document.querySelector('[data-pane="review"] .superdoc__sub-document');
+      if (s) s.scrollTop = 0;
+    });
+    await page.waitForTimeout(900);
+    pt = await plainTextPoint();
+  }
+  if (pt) await page.mouse.click(pt.x, pt.y);
+  else await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+};
+/** Put the cursor at the very start of the document (the title), away from the bot's changes, ready to type. */
+const cursorToStart = async () => {
+  const inEditor = () => page.evaluate(() => !!document.activeElement?.closest?.(".superdoc"));
+  // right after an accept/undo the editor is still busy and lets a click pass without taking the focus: retry
+  for (let i = 0; i < 6; i++) {
+    await clickPlainText();
+    await page.waitForTimeout(300);
+    if (await inEditor()) break;
+    await page.waitForTimeout(700);
+  }
+  await page.keyboard.press("Control+Home");
+  await page.waitForTimeout(300);
+};
+/** Tracked insertions whose text contains `s` (what typing in Suggesting mode creates). */
+const insertedWith = async (s) => ((await listTracked())?.items ?? []).filter((i) => (i.insertedText ?? "").includes(s)).length;
+await clickPlainText();
 const kBefore = await activeKeyNow();
 await page.keyboard.press("Escape");
-await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
-const textBefore = await page.evaluate(() => document.querySelector(".superdoc-page")?.textContent?.length ?? 0);
+await cursorToStart();
+const jBefore = await insertedWith("j");
 await page.keyboard.type("j");
-await page.waitForTimeout(600);
-const textAfter = await page.evaluate(() => document.querySelector(".superdoc-page")?.textContent?.length ?? 0);
+await page.waitForTimeout(800);
+const jAfter = await insertedWith("j");
+const kAfterTyping = await activeKeyNow();
 await page.keyboard.press("Backspace");
-check("shortcuts: typing a letter in the document stays text", textAfter === textBefore + 1 && (await activeKeyNow()) === kBefore, `${textBefore} -> ${textAfter}`);
+await page.waitForTimeout(600);
+check("shortcuts: typing a letter in the document stays text", jAfter === jBefore + 1 && kAfterTyping === kBefore, `tracked insertions with "j": ${jBefore} -> ${jAfter}; active card ${kBefore} -> ${kAfterTyping}`);
 
 // 4e2. review bar: Next/Previous through the open changes in document order, Accept from the bar (Undo brings it back)
 {
@@ -453,10 +496,11 @@ check("shortcuts: typing a letter in the document stays text", textAfter === tex
   check("review bar: Accept resolves the highlighted change and moves on; Undo brings it back", openA !== openB && (nA ?? n1 - 1) === n1 - 1 && openU === openB, `${openB} -> ${openA} -> ${openU}; ${n1} -> ${nA}`);
 
   // your own edit (Suggesting mode) is a card of its own, with Accept / Reject
-  await page.locator(".superdoc-page").first().click({ position: { x: 300, y: 400 } });
+  await cursorToStart();
   await page.keyboard.type("Zqx");
   await page.waitForTimeout(1500);
   const ownCard = panel.locator("li[data-change-key^='own:']").filter({ hasText: "Your edit" });
+  await ownCard.first().waitFor({ timeout: 10000 }).catch(() => {});
   const ownShown = (await ownCard.count()) >= 1 && (await panel.getByRole("tab", { name: /^Your edits \d/ }).count()) === 1;
   const summary = await openLine();
   await ownCard.last().hover();
@@ -495,6 +539,43 @@ const saved = await (await fetch(`${base}/api/jobs/${job.id}`)).json();
 check("save creates a new version", saved.versions.length === 3, saved.versions.map((v) => v.label).join(" | "));
 const saveStatus = await page.getByText(/^Saved (just now|\d+ min ago)$/).first().isVisible().catch(() => false);
 check("save status shows when it was saved", saveStatus);
+
+// 5a. Word-style balloons beside the page (on by default), and the switch to hide them
+{
+  const bar = page.locator("[data-review-bar]");
+  const balloonInfo = () => page.evaluate(() => {
+    const cards = [...document.querySelectorAll('[data-pane="review"] .comment-placeholder')];
+    const shown = cards.filter((e) => getComputedStyle(e).visibility !== "hidden" && e.getBoundingClientRect().height > 20);
+    const formatting = cards.filter((e) => e.getAttribute("data-comment-id")?.includes("|formatting") && e.getBoundingClientRect().height > 20);
+    const pg = document.querySelector('[data-pane="review"] .superdoc-page')?.getBoundingClientRect();
+    const column = document.querySelector('[data-pane="review"] .superdoc--with-sidebar .superdoc__right-sidebar')?.getBoundingClientRect();
+    // the balloons column is beside the page, never over it
+    const clear = !column || !pg || pg.right <= column.left + 1;
+    return { shown: shown.length, formatting: formatting.length, column: !!column, clear };
+  });
+  // the zoom test above left a zoom picked by hand: go back to fitting the page, which makes room for the balloons
+  const zbar = page.locator('[data-zoom="review"]');
+  const zb = await zbar.boundingBox();
+  await page.mouse.move(zb.x + zb.width - 12, zb.y + zb.height / 2);
+  await zbar.getByRole("button", { name: "Fit page width" }).click();
+  await page.waitForTimeout(1500);
+  const on = await balloonInfo();
+  await bar.getByRole("button", { name: "Balloons" }).click();
+  await page.waitForFunction(() => !!document.querySelector('[data-pane="review"] .superdoc-page'), null, { timeout: 60000 });
+  await page.waitForTimeout(3500);
+  const off = await balloonInfo();
+  const pressedOff = await bar.getByRole("button", { name: "Balloons" }).getAttribute("aria-pressed");
+  await bar.getByRole("button", { name: "Balloons" }).click();
+  await page.waitForTimeout(4000);
+  const back = await balloonInfo();
+  const versionsNow = (await (await fetch(`${base}/api/jobs/${job.id}`)).json()).versions.length;
+  check(
+    "balloons: Word-style cards beside the page (formatting ones hidden with their marks); the switch hides and shows them",
+    on.column && on.clear && on.shown > 0 && on.formatting === 0 && !off.column && off.shown === 0 && pressedOff === "false" && back.column && back.shown > 0 && versionsNow === 3,
+    `on ${JSON.stringify(on)}, off ${JSON.stringify(off)}, back ${JSON.stringify(back)}, versions ${versionsNow}`,
+  );
+  await page.screenshot({ path: path.join(out, "02h-balloons.png") });
+}
 
 // 5b. Mark as done teaches the bot (a learned record of this test's own document, removed at the end)
 await page.getByRole("button", { name: /Export/ }).first().click();

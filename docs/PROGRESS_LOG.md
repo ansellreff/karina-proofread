@@ -833,3 +833,21 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - the new default export name.
 - Screenshots checked in light and dark, desktop, side by side and phone.
 - Only test documents made by the tests were removed; her 6 documents are unchanged.
+
+## Word-style balloons
+**Request:** a way to see the tracked-change balloons, with a switch to show or hide them, like Word.
+
+- **Before:** a change's balloon only opened when you clicked the change (it still does that when balloons are off).
+- **Review bar → Balloons** (on by default, remembered): every change and comment gets a balloon in a column beside the page, as in Word's "All Markup". The balloons show who made the change, what changed ("Replaced 'my self' with 'myself'", "Added …"), ✓ / ✗ to accept or reject, and a reply box. The page makes room for the column.
+- **Narrow space:** when the document is too narrow for balloons beside the page (side by side, or a very wide review panel), they turn back into a balloon that opens on click, and come back when there is room again.
+- **Formatting balloons follow the Formatting marks button:** while the marks are hidden, the dozens of "Formatted: …" balloons are left out, so the wording changes sit next to their text.
+- **Switching** reopens the document view, because the editor only reads this setting when it opens. Unsaved edits are saved first (as the autosave draft), so nothing is lost; the undo history of earlier decisions starts fresh.
+- **Found and fixed:** a balloon could hang over the review bar and block its buttons. The document area now clips its content.
+
+### Verified
+- 83 unit tests, lint and type check pass.
+- Full end-to-end test: **63/63**, twice in a row. New check: balloons are shown beside the page (never over it), with no formatting balloons while their marks are hidden; the switch hides them and brings them back; no extra version is made when nothing was unsaved.
+- **Test fixes only:**
+  - typing checks now type at the start of the document and read the result from the editor;
+  - they wait for the shortcuts dialog to close, and for the editor to take the focus after an undo.
+- **The app now holds the jump target briefly:** after a jump (review bar, panel, J/K), the editor's own "active change" report is ignored for about a second, so the highlight no longer jumps back.

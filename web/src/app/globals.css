@@ -225,7 +225,6 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
   width: 100%;
   min-width: 0;
 }
-
 /* Suggestions read as in Word: the changed text is red (on the white page in every theme, 6.5:1), keeping its own
    bold/italic; the boxes, backgrounds and focus highlight stay SuperDoc's. Only the screen: the .docx is untouched.
    !important beats a colour the run carries from the Word file, as Word's markup does. */
@@ -244,6 +243,19 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
 [data-format-marks="hidden"] {
   --sd-tracked-changes-format-border: transparent;
   --sd-track-format-border: transparent;
+}
+/* …and their balloons (one per run/paragraph, dozens) leave the balloon column to the wording changes */
+[data-format-marks="hidden"] .comment-placeholder[data-comment-id*="|formatting"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-format-marks="hidden"] .comment-placeholder[data-comment-id*="|formatting"] > * {
+  height: 1px !important;
+  min-height: 1px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
 }
 
 /* SuperDoc's web (phone) layout ships no tracked-change styles; mirror its page layout's markup. */

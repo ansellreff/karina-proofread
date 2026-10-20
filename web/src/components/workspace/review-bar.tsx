@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Paintbrush, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, MessageSquareText, Paintbrush, X } from "lucide-react";
 import { Tip } from "@/components/tip";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -28,6 +28,9 @@ export function ReviewBar({
   formatMarks,
   onFormatMarks,
   formatCount,
+  balloons,
+  onBalloons,
+  balloonsBusy,
 }: {
   /** Index of the highlighted change among the open ones (-1: none highlighted). */
   position: number;
@@ -45,11 +48,15 @@ export function ReviewBar({
   onFormatMarks: (m: FormatMarks) => void;
   /** Open formatting changes (the marks the switch hides). */
   formatCount: number;
+  /** Word-style balloons beside the page; off: a change's balloon opens when it is clicked. */
+  balloons: boolean;
+  onBalloons: () => void;
+  balloonsBusy: boolean;
 }) {
   const editable = mode !== "viewing";
   const active = position >= 0;
   return (
-    <div role="toolbar" aria-label="Review" data-review-bar className="no-print hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-2 py-1.5 md:flex">
+    <div role="toolbar" aria-label="Review" data-review-bar className="no-print relative z-30 hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-2 py-1.5 md:flex">
       <div className="flex min-w-0 items-center gap-1">
         <Tip label="Previous change" keys="K">
           <Button size="icon-sm" variant="ghost" onClick={() => onStep(-1)} disabled={!total} aria-label="Previous change">
@@ -110,6 +117,11 @@ export function ReviewBar({
           <Switch size="sm" checked={mode === "suggesting"} disabled={!editable} onCheckedChange={(on) => onTracking(on)} aria-label="Track my edits" />
           Track my edits
         </label>
+        <Tip label={balloons ? "Hide the balloons beside the page (a change's balloon then opens when you click it)" : "Show every change and comment in a balloon beside the page, as in Word"}>
+          <Button size="sm" variant={balloons ? "secondary" : "ghost"} aria-pressed={balloons} aria-label="Balloons" onClick={onBalloons} disabled={balloonsBusy}>
+            {balloonsBusy ? <Loader2 className="animate-spin" /> : <MessageSquareText />} <span className="hidden lg:inline">Balloons</span>
+          </Button>
+        </Tip>
         <Tip label={formatMarks === "hidden" ? "Show the marks of formatting changes (font, size, spacing)" : "Hide the marks of formatting changes, so wording changes stand out"}>
           <Button
             size="sm"

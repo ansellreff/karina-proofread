@@ -170,6 +170,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   /** Panel item last jumped to; used when it has no live tracked change (already accepted or rejected). */
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const unfollow = useRef<() => void>(() => {});
+  /** The change just jumped to (review bar, panel, J/K): the editor's own active reports are ignored briefly. */
+  const jumpedTo = useRef<{ ids: Set<string>; until: number }>({ ids: new Set(), until: 0 });
+  const followActive = useCallback((id: string | null) => {
+    const j = jumpedTo.current;
+    if (Date.now() < j.until && !(id && j.ids.has(id))) return;
+    setActiveId(id);
+  }, []);
   /** Accept/reject decisions made from the panel, newest last, so a misclick can be undone. */
   const [decisions, setDecisionsState] = useState<Decision[]>([]);
   const decisionsRef = useRef<Decision[]>([]); // read by toast callbacks, which outlive renders
@@ -353,6 +360,25 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
 
   // ---- the open changes in document order (review bar, J/K); formatting is skipped while its marks are hidden
   const [formatMarks, setFormatMarks] = usePreference<FormatMarks>("format-marks", "hidden");
+  /** Word-style balloons beside the page (remembered). Switching reopens the editor, so unsaved edits are saved first. */
+  const [balloons, setBalloons] = usePreference("balloons", true);
+  const [switchingBalloons, setSwitchingBalloons] = useState(false);
+  async function toggleBalloons() {
+    if (switchingBalloons) return;
+    setSwitchingBalloons(true);
+    try {
+      let target = shown;
+      if (dirty) {
+        const saved = await save({ autosave: true });
+        if (saved === job) return; // saving failed (it says why): keep the editor and its edits as they are
+        target = saved.current;
+      }
+      setBalloons(!balloons);
+      if (target !== loaded) setLoaded(target); // the editor must open what is on screen now, not the file it opened with
+    } finally {
+      setSwitchingBalloons(false);
+    }
+  }
   const openInOrder = useMemo(() => {
     const pos = new Map(tracked.map((t, i) => [t.id, i]));
     const first = (c: PanelChange) => Math.min(...c.live.map((t) => pos.get(t.id) ?? Number.MAX_SAFE_INTEGER));
@@ -366,8 +392,11 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     if (phone) setSheetOpen(false); // the sheet would cover the document
     let found = false;
     if (c.live[0]) {
+      // the editor does not always report the new active change (a replacement), and while it scrolls it can still
+      // report the previous one: hold this one for a moment
+      jumpedTo.current = { ids: new Set(c.live.map((t) => t.id)), until: Date.now() + 1200 };
+      setActiveId(c.live[0].id);
       found = await focusTracked(sd.current, c.live[0].id);
-      // the editor does not always report the new active change (a replacement), so the old highlight stayed
       setActiveId(c.live[0].id);
     } else {
       clearActiveTracked(sd.current);
@@ -918,7 +947,10 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             aria-hidden={view === "original" || undefined}
             className={cn("relative flex min-w-0 flex-1 flex-col transition-opacity", view === "original" && "invisible", paneDrag?.which === "review" && "opacity-35")}
             style={sideBySide ? { order: originalSide === "left" ? 2 : 0 } : undefined}
-            onClickCapture={(e) => activateTrackedAt(sd.current, e.clientX, e.clientY)}>
+            onClickCapture={(e) => {
+              jumpedTo.current.until = 0; // a click in the document always wins over the hold after a jump
+              activateTrackedAt(sd.current, e.clientX, e.clientY);
+            }}>
           {sideBySide && (
             <PaneHeader
               which="review"
@@ -943,17 +975,22 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               formatMarks={formatMarks}
               onFormatMarks={setFormatMarks}
               formatCount={openFormat}
+              balloons={balloons}
+              onBalloons={() => void toggleBalloons()}
+              balloonsBusy={switchingBalloons}
             />
           )}
-          <div className="relative min-h-0 flex-1">
+          {/* clipped: balloons beside the page must not spill over the review bar above */}
+          <div className="relative min-h-0 flex-1 overflow-hidden">
           {/* the phone (web) layout does not mark the active change itself; a rule survives its re-renders */}
           {activeId && <style>{`.superdoc-web-flow-run[data-track-change-id="${activeId.replace(/["\\]/g, "\\$&")}"]{outline:2px solid var(--primary);outline-offset:1px;border-radius:2px}`}</style>}
           {editorError ? (
             <EditorPlaceholder text={editorError} />
           ) : file ? (
             <DocEditor
-              key={`${loaded}-${file.size}-${phone ? "web" : "print"}`}
+              key={`${loaded}-${file.size}-${phone ? "web" : "print"}-${balloons ? "balloons" : "inline"}`}
               reflow={phone}
+              balloons={balloons}
               file={file}
               mode={mode}
               userName={authorName}
@@ -961,7 +998,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
                 sd.current = s;
                 if (process.env.NODE_ENV !== "production") (window as unknown as { __superdoc?: unknown }).__superdoc = s; // e2e checks
                 unfollow.current();
-                unfollow.current = onActiveTracked(s, setActiveId);
+                unfollow.current = onActiveTracked(s, followActive);
                 resetDecisions();
                 sdSetMode(s, mode);
                 refresh();
