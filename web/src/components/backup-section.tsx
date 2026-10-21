@@ -93,6 +93,7 @@ export function BackupSection() {
         body.documentsAdded ? `${plural(body.documentsAdded, "document")} added` : "No documents added",
         body.documentsSkipped ? `${body.documentsSkipped} already here, left as they are` : "",
         body.learningAdded ? `${plural(body.learningAdded, "learned review")} added` : "",
+        body.recordAdded ? `${body.recordAdded} Proofread record ${body.recordAdded === 1 ? "entry" : "entries"} added` : "",
         body.settingsRestored ? "rules, rulebook and settings put back" : "",
       ].filter(Boolean);
       toast.success(`Backup restored: ${parts.join("; ")}.`, { duration: 8000 });

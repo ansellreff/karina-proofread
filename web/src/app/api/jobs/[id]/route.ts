@@ -1,4 +1,5 @@
 import { learnFromJob } from "@/lib/learn/learn";
+import { countedNumber } from "@/lib/record/view";
 import { stores } from "@/lib/storage/stores";
 import type { Job } from "@/lib/store/types";
 
@@ -17,24 +18,31 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const store = st.jobs;
   const job = await store.get((await ctx.params).id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
-  const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">>;
+  const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">> & { manual?: boolean };
   if (body.status) {
     if (!STATUSES.includes(body.status)) return Response.json({ error: "Unknown status." }, { status: 400 });
     job.status = body.status;
   }
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;
+  // "Proofread it myself": a manual proofread, without bot help (counted on the record with the first saved edits)
+  if (body.manual === true && !job.manual) job.manual = { at: new Date().toISOString() };
   job.updatedAt = new Date().toISOString();
   await store.save(job);
   // A finished document teaches the bot (Review rules → From your reviews). Never blocks marking it done.
   let learned: Awaited<ReturnType<typeof learnFromJob>> = null;
+  let counted: number | null = null;
   if (body.status === "done") {
     try {
       learned = await learnFromJob(job, store, st.learn, await st.config.loadRules());
     } catch (e) {
       console.error("learning from a finished document failed", e);
     }
+    // the Proofread record's finished tick (a document not counted yet counts now, as manual)
+    counted = await st.record.markDone(job).then((n) => countedNumber(st, n)).catch(() => null);
+  } else if (body.status) {
+    await st.record.unfinish(job.id).catch(() => {}); // reopened: worked on, not finished
   }
-  return Response.json(learned ? { ...job, learned } : job);
+  return Response.json({ ...job, ...(learned ? { learned } : {}), ...(counted ? { counted } : {}) });
 }
 
 /** Moves the document to the trash (it can be restored from "Recently deleted"). */

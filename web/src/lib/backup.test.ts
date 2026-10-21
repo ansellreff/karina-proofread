@@ -62,7 +62,7 @@ describe("backup", () => {
     // an empty app gets everything back (rules and settings only when asked)
     const t = fresh();
     const r = await restoreBackup(t, file, { settings: true });
-    expect(r).toEqual({ documentsAdded: 1, documentsSkipped: 0, learningAdded: 1, settingsRestored: true });
+    expect(r).toEqual({ documentsAdded: 1, documentsSkipped: 0, learningAdded: 1, recordAdded: 0, settingsRestored: true });
     const back = await t.jobs.get(job.id);
     expect(back?.versions).toHaveLength(2);
     expect((await t.jobs.list()).map((j) => j.id)).toEqual([job.id]);
@@ -87,7 +87,7 @@ describe("backup", () => {
     await s.jobs.saveSettings({ ...(await s.jobs.getSettings()), authorName: "Changed" });
 
     const r = await restoreBackup(s, file);
-    expect(r).toEqual({ documentsAdded: 0, documentsSkipped: 2, learningAdded: 0, settingsRestored: false });
+    expect(r).toEqual({ documentsAdded: 0, documentsSkipped: 2, learningAdded: 0, recordAdded: 0, settingsRestored: false });
     expect((await s.jobs.get(a.id))?.versions).toHaveLength(2); // the newer work is kept
     expect(await s.jobs.get(b.id)).toBeNull(); // still in Recently deleted, not duplicated
     expect((await s.jobs.usage()).map((u) => u.costUsd)).toEqual([0.1, 0.2]);

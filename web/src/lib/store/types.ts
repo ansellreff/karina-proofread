@@ -48,6 +48,8 @@ export interface Job {
   score?: { total: number; at: string };
   /** The student sent a PDF: it was converted to Word (fileName is the .docx); the PDF is kept as sent. */
   sourceFile?: { name: string; kind: "pdf"; notes: string[] };
+  /** "Proofread it myself": Karina proofreads this one by hand, without bot help (Proofread record: manual). */
+  manual?: { at: string };
 }
 
 export interface Settings {

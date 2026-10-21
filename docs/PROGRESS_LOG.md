@@ -946,3 +946,61 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - 92 unit tests (4 new: the numbering rules, the version matches `package.json`, every listed commit exists in git, the running-version lookup), lint and type check pass.
 - Full end-to-end test: **70/70**. New check: the dot shows for an unread version and clears after a visit; the badge says V.5.4; the page starts at V.5.4 with "On this computer"; V.1 is folded; Major versions only lists 5.0 to 1.0.
 - **Screenshots checked:** the five tabs fit the phone header.
+
+## V.6.0: Proofread record (trophy page)
+**Request:** a sixth tab, "Proofread record": a trophy page counting every student document she proofreads (with AI, with the bot without AI, or by hand). The count is kept for good, even when documents are deleted, and the page congratulates her more as the count grows. At her request: **Worked on** and **Finished** are counted separately, so she can catch the finished count up. Counting starts from 0 when this update goes live.
+
+- **How a document counts (once):**
+  - when the bot proofread finishes (**With AI** or **Bot without AI**);
+  - or, after **Proofread it myself**, with her first saved edits (**Manual**).
+  - Proofreading again never counts it twice.
+  - **Mark as done** gives it the **Finished** tick (a document never counted is counted as manual then). Reopening removes the tick.
+- **Proofread it myself:**
+  - A new button next to "Proofread this document" for a document the bot hasn't proofread.
+  - A banner on the document then says *"Manual proofread: you're checking this document yourself, without bot help."*
+  - The bot can still be used later.
+- **Kept for good:**
+  - **What each entry holds:** first name, document type, method and dates, in a folder of its own.
+  - **What never touches it:** deleting a document, Delete forever, the 7-day cleanup, Delete all documents.
+  - **Backups:** it is in backups, and restoring adds missing entries only.
+  - **This PC and online are separate:** the online record is her real one.
+- **The page:**
+  - **The trophy:** a trophy drawn in the app (no images) under a spotlight, with **Worked on** and **Finished** counting up.
+  - **Two meters:** a catch-up meter ("3 documents to catch up", "All caught up!") and the progress to the next level.
+  - **Students helped:** different first names among finished documents.
+  - **Levels by Finished:** 1 First proofread, 10 Bronze, 25 Silver, 50 Gold, 100 Platinum, 250 Diamond, 500 Legend, 1000 Hall of fame. The trophy gets richer at each level: glow, light rays, sparkles, laurel wreath, gem, turning ring, crown.
+  - **Celebrations** (compared with her last visit in that browser): confetti and "Congratulations!" for more finished documents, a bigger burst for a new level, "All caught up!" when the counts meet, and a quiet note when there are only new documents to finish.
+  - **Further down:** the badge shelf (with the date each level was reached), totals per method, a 12-month chart of Worked on vs Finished, totals per document type, and the full list.
+    - Deleted documents show "Document deleted, record kept".
+    - **Remove from record** (with a confirmation) is for anything added only to try something out.
+  - **Motion off:** for people who turn animation off, nothing moves.
+- **Elsewhere:**
+  - **A toast** "🏆 Counted on your Proofread record: #n" when a document is counted.
+  - **The menu** fits six tabs on a phone: the labels are a little tighter there.
+- **Found and fixed while checking:**
+  - the wreath leaves were slightly different on the server and in the browser (rounding), which React reported; now rounded;
+  - dates are written in UTC on the server and in her own time zone in the browser, so they never disagree.
+
+### Verified
+- 98 unit tests (6 new: counted once, the manual cases, the tick and reopening, surviving every kind of deletion, backup merge, students, levels, remove).
+- **Full end-to-end test**, new checks:
+  - the rules-only proofread counts the test document (#n);
+  - Mark as done ticks it, and reopening removes the tick;
+  - Proofread it myself shows the banner, and the first save counts it as manual, with the toast;
+  - the record page keeps the deleted document, celebrates with confetti, shows the finished count and the trophy level, and Remove from record works;
+  - the record keeps the test document after it is deleted forever.
+  - The test removes only its own entries; her record and her 6 documents are untouched.
+- **Screenshots checked:** levels 0, 3, 30, 60, 120, 600 and 1200, in light and dark, on desktop and phone (made-up names in the development-only preview).
+
+### Safety net (Karina's addition while it was being built)
+**Request:** if she starts a document, doesn't finish it, and deletes it, **Worked on** should go down too; otherwise Finished could never catch up.
+
+- **Unfinished document deleted:**
+  - In Recently deleted, it stops counting at once. The list shows it greyed: *"In Recently deleted, not counted: restore it to count it again"*.
+  - Restoring it within the 7 days makes it count again.
+  - Once it is gone for good (Delete forever, the 7-day cleanup, or Delete all documents), its entry leaves the record.
+- **Finished document deleted:** it stays on the record for good, as before ("Document deleted, record kept").
+- **Where it runs:** whenever the record is read: the Proofread record page, its data, and the "#n" in the toasts. So the numbers always match what's in the app, whichever way something was deleted.
+- **Verified:**
+  - unit test: delete an unfinished document (not counted), restore it (counted), delete it for good (removed), and the 7-day cleanup case; a finished one deleted stays;
+  - e2e: the test's own unfinished document lowers Worked on by 1 in Recently deleted, then leaves the record when deleted forever.

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, Save, ScanText, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Columns2, Download, Eye, FileCheck2, FileText, Keyboard, ListChecks, Loader2, MessageSquareText, PanelRightClose, PanelRightOpen, Pencil, PenLine, Save, ScanText, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -135,6 +135,13 @@ function describeChange(c: PanelChange): string {
 
 export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { initialJob: Job; aiDefault: boolean; hasApiKey: boolean; authorName: string }) {
   const router = useRouter();
+  /** A document just counted on the Proofread record (#n): say so, with a way to see the record. */
+  const toastCounted = useCallback(
+    (n: number | null) => {
+      if (n) toast(`🏆 Counted on your Proofread record: #${n}`, { action: { label: "See record", onClick: () => router.push("/record") } });
+    },
+    [router],
+  );
   const [job, setJob] = useState(initialJob);
   /** The version file fetched into the editor (changing it reloads the editor). */
   const [loaded, setLoadedState] = useState(initialJob.current);
@@ -277,8 +284,9 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         if (latestScore.current !== null) form.append("score", String(latestScore.current));
         const res = await fetch(`/api/jobs/${job.id}/versions`, { method: "POST", body: form });
         if (!res.ok) throw new Error((await res.json()).error ?? "Saving failed.");
-        const updated = (await res.json()) as Job;
+        const { counted, ...updated } = (await res.json()) as Job & { counted?: number };
         setJob(updated);
+        toastCounted(counted ?? null); // a manual proofread is counted with its first saved edits
         setShown(updated.current); // the editor already shows this content; no reload
         setDirty(false);
         setLastSave({ at: new Date().toISOString(), auto: !!opts.autosave });
@@ -291,7 +299,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         setSaving(false);
       }
     },
-    [job],
+    [job, toastCounted],
   );
 
   const onUpdate = useCallback(() => {
@@ -597,10 +605,22 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
     const latest = dirty ? await save({ label: "Your edits" }) : job;
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     if (res.ok) {
-      const { learned, ...updated } = (await res.json()) as Job & { learned?: Learned };
+      const { learned, counted, ...updated } = (await res.json()) as Job & { learned?: Learned; counted?: number };
       setJob({ ...updated, current: latest.current });
       toastDone(learned, () => router.push("/rules?tab=learned"));
+      toastCounted(counted ?? null);
     }
+  }
+
+  /** "Proofread it myself": a manual proofread without bot help (counted on the record with the first saved edits). */
+  async function proofreadMyself() {
+    const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ manual: true }) });
+    if (!res.ok) return toast.error("Could not start a manual proofread.");
+    const updated = (await res.json()) as Job;
+    setJob((j) => ({ ...updated, current: j.current }));
+    changeMode("suggesting");
+    if (phone) setSheetOpen(false);
+    toast.success("Manual proofread: your edits are tracked as suggestions. It counts on your Proofread record when you save.");
   }
 
   const panel = (
@@ -647,9 +667,21 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
             ) : (
               <>
                 <p>This is the student&apos;s original, untouched.</p>
-                <Button onClick={() => setProofreadOpen(true)}>
-                  <Sparkles /> Proofread this document
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setProofreadOpen(true)}>
+                    <Sparkles /> Proofread this document
+                  </Button>
+                  {!job.manual && (
+                    <Button variant="outline" onClick={() => void proofreadMyself()}>
+                      <PenLine /> Proofread it myself
+                    </Button>
+                  )}
+                </div>
+                {job.manual ? (
+                  <p className="text-xs">You are proofreading this one yourself. Your saved edits count it on your Proofread record.</p>
+                ) : (
+                  <p className="text-xs">Proofread it myself: check it by hand, without bot help. It still counts on your Proofread record.</p>
+                )}
               </>
             )}
           </div>
@@ -965,6 +997,11 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
               drag={paneDragHandlers("review")}
             />
           )}
+          {job.manual && !hasBotVersion && view === "review" && (
+            <p role="status" data-manual-banner className="no-print flex shrink-0 items-center gap-2 border-b bg-secondary px-3 py-1.5 text-xs text-secondary-foreground">
+              <PenLine className="size-3.5 shrink-0" /> Manual proofread: you’re checking this document yourself, without bot help.
+            </p>
+          )}
           {file && !editorError && (
             <ReviewBar
               position={barPosition}
@@ -1114,13 +1151,14 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
         onOpenChange={setProofreadOpen}
         aiDefault={aiDefault}
         hasApiKey={hasApiKey}
-        onDone={(updated) => {
+        onDone={(updated, counted) => {
           setJob(updated);
           setDirty(false);
           setMode("suggesting");
           setLoaded(updated.current);
           setTab("changes");
           toast.success(`Proofread: ${updated.proofread?.changes.length ?? 0} changes${updated.proofread?.costUsd ? `, cost US$${updated.proofread.costUsd.toFixed(2)}` : ""}`);
+          toastCounted(counted);
         }}
       />
     </div>

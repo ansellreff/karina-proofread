@@ -35,6 +35,22 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.0",
+    date: "2026-10-21",
+    kind: "major",
+    title: "Proofread record",
+    summary: "A trophy page that counts every document you proofread, with Worked on and Finished side by side.",
+    points: [
+      { kind: "new", text: "Proofread record tab: a trophy that grows with every document you finish, from First proofread to Hall of fame, with confetti when you finish more.", href: "/record", where: "Proofread record" },
+      { kind: "new", text: "Worked on and Finished are counted separately, with a catch-up meter between them. Mark as done ticks a document finished." },
+      { kind: "new", text: "Each document counts once: when the bot proofreads it (with or without AI), or when you choose “Proofread it myself” and save your first edits." },
+      { kind: "new", text: "Proofread it myself: check a document by hand, without bot help. A banner on the document says so." },
+      { kind: "improved", text: "Finished documents stay on your record for good, even after they are deleted. A document deleted before it was finished stops counting, so Worked on is only what you can still finish." },
+      { kind: "new", text: "Levels, totals per method and document type, a 12-month chart and the full list. The record is part of your backups." },
+    ],
+    commits: [],
+  },
+  {
     version: "5.4",
     date: "2026-10-21",
     kind: "minor",
@@ -46,7 +62,7 @@ export const RELEASES: Release[] = [
       { kind: "new", text: "Each version shows whether it is the one running online, so you can see at a glance if the website has the latest update." },
       { kind: "new", text: "Each version shows a short code. To go back to a version, ask Claude: “go back to V.x.y”." },
     ],
-    commits: [],
+    commits: ["165a67e"],
   },
   {
     version: "5.3",
@@ -61,7 +77,7 @@ export const RELEASES: Release[] = [
       { kind: "new", text: "Restore by dropping the backup file on the page. It only adds what is missing; it never overwrites newer work." },
       { kind: "new", text: "See how much is stored, and free up space by deleting all documents (after typing DELETE). Rules, learning and settings stay." },
     ],
-    commits: ["878d746"],
+    commits: ["1377415"],
   },
   {
     version: "5.2",

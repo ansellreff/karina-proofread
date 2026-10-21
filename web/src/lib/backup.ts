@@ -5,6 +5,7 @@
  *   manifest.json                what is inside (counts, dates) — read by the page before restoring
  *   data/jobs/<id>/…             every document with all its versions (and the student's PDF)
  *   data/learning/…              what the bot learned from her reviews
+ *   data/proofread-record/…      the Proofread record (merged on restore: missing entries added)
  *   data/settings.json, data/usage/…, data/usage.jsonl   app settings and the AI cost history
  *   config/karina-rules.json, config/karina-style-guide.md   her review rules and AI rulebook
  * Not included: Recently deleted, the AI-password lock state, the Documents index (rebuilt on restore).
@@ -33,6 +34,8 @@ export interface RestoreResult {
   /** Already in the app (or in Recently deleted): left as they are. */
   documentsSkipped: number;
   learningAdded: number;
+  /** Proofread record entries added (existing ones are never changed). */
+  recordAdded: number;
   /** Rules, rulebook and settings put back (only when asked). */
   settingsRestored: boolean;
 }
@@ -123,7 +126,7 @@ const LEARN_RECORD = /^records\/[^/]+\.json$/;
 export async function restoreBackup(s: Stores, input: Uint8Array, opts: { settings?: boolean } = {}): Promise<RestoreResult> {
   const zip = await JSZip.loadAsync(input);
   await readManifest(zip);
-  const result: RestoreResult = { documentsAdded: 0, documentsSkipped: 0, learningAdded: 0, settingsRestored: false };
+  const result: RestoreResult = { documentsAdded: 0, documentsSkipped: 0, learningAdded: 0, recordAdded: 0, settingsRestored: false };
 
   // documents: whole documents only, and only those not here already (nor in Recently deleted)
   const present = new Set((await s.jobs.list()).map((j) => j.id));
@@ -163,6 +166,14 @@ export async function restoreBackup(s: Stores, input: Uint8Array, opts: { settin
     const before = lines.size;
     for (const l of (await e.async("string")).split("\n").filter(Boolean)) lines.add(l);
     if (lines.size > before) await s.data.write(rel, [...lines].sort().join("\n") + "\n"); // untouched when nothing is new
+  }
+
+  // the Proofread record: entries not here yet (never changes or removes one)
+  for (const e of Object.values(zip.files)) {
+    const m = /^data\/proofread-record\/([a-f0-9-]{36}\.json)$/.exec(e.name);
+    if (!m || e.dir || (await s.record.files.read(m[1]))) continue;
+    await s.record.files.write(m[1], await e.async("uint8array"));
+    result.recordAdded++;
   }
 
   if (opts.settings) {

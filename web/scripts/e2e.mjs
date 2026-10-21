@@ -34,6 +34,8 @@ form.append("files", new Blob([await readFile(sample)]), path.basename(sample));
 const up = await (await fetch(`${base}/api/jobs`, { method: "POST", body: form })).json();
 const job = up.created?.[0];
 check("upload .docx", !!job, up.errors?.join("; "));
+/** Proofread record entries this test creates (removed at the end, so her record is never changed). */
+const testRecordIds = job ? [job.id] : [];
 /** Remove one of this test's own documents completely (to the trash, then erased), so "Recently deleted" stays clean. */
 async function discard(id) {
   const res = await fetch(`${base}/api/jobs/${id}`, { method: "DELETE" }).catch(() => null);
@@ -45,6 +47,7 @@ const cleanUp = async (e) => {
   console.error(e);
   if (job) await discard(job.id);
   if (job) await fetch(`${base}/api/learn/job-${job.id}`, { method: "DELETE" }).catch(() => {});
+  for (const id of testRecordIds) await fetch(`${base}/api/record/${id}`, { method: "DELETE" }).catch(() => {}); // only this test's entries
   process.exit(1);
 };
 process.on("uncaughtException", cleanUp);
@@ -53,6 +56,9 @@ const pr = await fetch(`${base}/api/jobs/${job.id}/proofread`, { method: "POST",
 const lines = (await pr.text()).trim().split("\n").map((l) => JSON.parse(l));
 const last = lines.at(-1);
 check("proofread streams progress and finishes", !!last.done && lines.some((l) => l.stage === "writing"), last.error ?? `${last.job?.proofread?.changes.length} changes`);
+const recordOf = async (id) => ((await (await fetch(`${base}/api/record`)).json()).entries ?? []).find((e) => e.id === id);
+const counted = await recordOf(job.id);
+check("Proofread record: the first proofread counts the document once (bot without AI)", typeof last.counted === "number" && counted?.method === "rules" && !counted.finishedAt, `#${last.counted}, ${JSON.stringify(counted)}`);
 
 const browser = await chromium.launch({ executablePath: edge, headless: true });
 const consoleErrors = [];
@@ -601,7 +607,10 @@ await page.getByText("Marked as done").first().waitFor({ timeout: 30000 });
 const learnedToast = await page.getByText(/The bot learned from this review|Learned from this review/).first().isVisible().catch(() => false);
 const jobRecord = (await (await fetch(`${base}/api/learn`)).json()).records.find((r) => r.id === `job-${job.id}`);
 check("mark as done: the bot learns what was kept, undone and added", learnedToast && !!jobRecord && jobRecord.suggestions.n > 0 && jobRecord.suggestions.kept > 0 && jobRecord.edits > 0, jobRecord ? `${jobRecord.edits} edits, ${JSON.stringify(jobRecord.suggestions)}` : "no record");
+check("Proofread record: Mark as done ticks the document finished (still counted once)", !!(await recordOf(job.id))?.finishedAt && (await recordOf(job.id))?.method === "rules");
 await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "ready" }) });
+const reopened = await recordOf(job.id);
+check("Proofread record: reopening a document removes its finished tick (it stays worked on)", !!reopened && !reopened.finishedAt);
 
 // 6. inspect the saved file
 const savedFile = new Uint8Array(await (await fetch(`${base}/api/jobs/${job.id}/file?v=${saved.current}`)).arrayBuffer());
@@ -834,7 +843,7 @@ try {
   const note = await dp.getByText(/kept here for 7 days, then deleted forever/).isVisible();
   await row.getByRole("button", { name: "Delete forever" }).click();
   await dp.getByRole("alertdialog").getByRole("button", { name: "Delete forever" }).click();
-  await dp.waitForTimeout(1200);
+  await row.waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
   const inTrash = ((await (await fetch(`${base}/api/trash`)).json()) ?? []).some((t) => t.job.id === job.id);
   const rowGone = (await row.count()) === 0;
   check("Recently deleted: 7-day note and countdown; Delete forever removes the document for good", note && /deleted forever in 7 days/.test(countdown) && !inTrash && rowGone && (await fetch(`${base}/api/jobs/${job.id}`)).status === 404, `"${countdown}", note ${note}, still in trash ${inTrash}`);
@@ -951,6 +960,60 @@ try {
   await up.close();
 }
 
+// 7f. Proofread record: a manual proofread ("Proofread it myself") is counted on its first save; the trophy page
+//     keeps it after the document is deleted, celebrates, and an entry can be removed from the record
+{
+  const mform = new FormData();
+  mform.append("files", new Blob([await readFile(sample)]), `Manual-${path.basename(sample)}`);
+  const mjob = (await (await fetch(`${base}/api/jobs`, { method: "POST", body: mform })).json()).created?.[0];
+  testRecordIds.push(mjob.id);
+  const mp = await newPage({ width: 1440, height: 900 });
+  await mp.goto(`${base}/jobs/${mjob.id}`);
+  await mp.waitForFunction(() => !!window.__superdoc, null, { timeout: 60000 });
+  await mp.waitForTimeout(2000);
+  await mp.locator("aside").getByRole("button", { name: "Proofread it myself" }).click();
+  const banner = await mp.locator("[data-manual-banner]").waitFor({ timeout: 10000 }).then(() => true, () => false);
+  const notYet = !(await recordOf(mjob.id));
+  for (let i = 0; i < 6; i++) {
+    await mp.locator('[data-pane="review"] .superdoc-page').first().click({ position: { x: 300, y: 300 } });
+    await mp.waitForTimeout(300);
+    if (await mp.evaluate(() => !!document.activeElement?.closest?.(".superdoc"))) break;
+    await mp.waitForTimeout(700);
+  }
+  await mp.keyboard.press("Control+Home");
+  await mp.keyboard.type("Zq ");
+  await mp.waitForTimeout(800);
+  await mp.getByRole("button", { name: /^Save$/ }).click();
+  const toastShown = await mp.getByText(/Counted on your Proofread record: #\d+/).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const manual = await recordOf(mjob.id);
+  check("manual proofread: “Proofread it myself” shows the banner; the first save counts it as manual, with a toast", banner && notYet && manual?.method === "manual" && toastShown, `banner ${banner}, toast ${toastShown}, ${JSON.stringify(manual)}`);
+  await mp.close();
+  await fetch(`${base}/api/jobs/${mjob.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
+  await discard(mjob.id);
+
+  const rp = await newPage({ width: 1280, height: 900 }); // a fresh browser: everything is new since its "last visit"
+  await rp.goto(`${base}/record`);
+  const row = rp.locator(`[data-record="${mjob.id}"]`);
+  await row.waitFor({ timeout: 15000 });
+  const kept = await row.getByText("Document deleted, record kept").isVisible();
+  const cheer = await rp.locator("[data-cheer]").waitFor({ timeout: 5000 }).then(() => true, () => false);
+  const confettiShown = await rp.locator("[data-confetti]").count().then((n) => n > 0);
+  await rp.waitForTimeout(2500); // the numbers count up
+  const finishedShown = Number(await rp.locator("[data-finished]").textContent());
+  const trophy = await rp.locator("[data-trophy]").getAttribute("data-trophy");
+  await rp.screenshot({ path: path.join(out, "11-proofread-record.png") });
+  await row.getByRole("button", { name: /Remove .* from the record/ }).click();
+  await rp.getByRole("alertdialog").getByRole("button", { name: "Remove from record" }).click();
+  await row.waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
+  const removed = !(await recordOf(mjob.id));
+  check(
+    "Proofread record page: deleted document kept, celebration with confetti, finished count and trophy level; Remove from record",
+    kept && cheer && confettiShown && finishedShown >= 1 && trophy !== "ready" && removed,
+    `kept ${kept}, cheer ${cheer}, confetti ${confettiShown}, finished ${finishedShown}, trophy ${trophy}, removed ${removed}`,
+  );
+  await rp.close();
+}
+
 // 8. phone layout
 const phone = await newPage({ width: 390, height: 844 });
 await phone.goto(`${base}/`);
@@ -1019,8 +1082,22 @@ if (pdfSample) {
 check("no requests leave the app (privacy)", !blocked.some((b) => b.startsWith("EXTERNAL")), blocked.filter((b) => b.startsWith("EXTERNAL")).slice(0, 3).join("; "));
 console.log(`\nconsole errors (${consoleErrors.length}):`, consoleErrors.slice(0, 8));
 await browser.close();
-await discard(job.id);
+// safety net: this test's document is unfinished (reopened above); deleting it stops it counting, deleting it for good
+// removes it from the record (a finished one stays: checked in 7f)
+const workedNow = async () => (await (await fetch(`${base}/api/record`)).json()).summary.worked;
+const workedBefore = await workedNow();
+const trashed = (await (await fetch(`${base}/api/jobs/${job.id}`, { method: "DELETE" })).json()).trashed;
+const workedInTrash = await workedNow();
+const inTrashRow = await recordOf(job.id);
+await fetch(`${base}/api/trash/${encodeURIComponent(trashed)}`, { method: "DELETE" });
+const goneForGood = !(await recordOf(job.id));
+check(
+  "Proofread record safety net: an unfinished document deleted stops counting, and leaves the record when deleted for good",
+  !!trashed && workedInTrash === workedBefore - 1 && inTrashRow?.doc === "trash" && !inTrashRow?.finishedAt && goneForGood,
+  `worked ${workedBefore} -> ${workedInTrash}, row ${inTrashRow?.doc}, gone ${goneForGood}`,
+);
 await fetch(`${base}/api/learn/job-${job.id}`, { method: "DELETE" }).catch(() => {}); // what it learned from this test's document
+for (const id of testRecordIds) await fetch(`${base}/api/record/${id}`, { method: "DELETE" }).catch(() => {});
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${out}`);
 process.exit(failed ? 1 : 0);

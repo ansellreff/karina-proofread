@@ -38,7 +38,7 @@ describe("update log", () => {
     for (const c of RELEASES.flatMap((r) => r.commits)) {
       expect(() => execFileSync("git", ["cat-file", "-e", `${c}^{commit}`], { stdio: "ignore" }), c).not.toThrow();
     }
-  });
+  }, 30_000); // one git call per commit: slow while the other tests run alongside
 
   it("finds the release a deployed commit belongs to; a commit not listed yet is the newest release", () => {
     expect(releaseOfCommit("bcf949d0123456789")?.version).toBe("4.3");

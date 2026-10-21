@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/costs", label: "AI costs", short: "Costs" },
   { href: "/settings", label: "Settings", short: "Settings" },
   { href: "/updates", label: "Update log", short: "Updates" },
+  { href: "/record", label: "Proofread record", short: "Record" },
 ];
 
 export function NavLinks() {
@@ -22,7 +23,7 @@ export function NavLinks() {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const unread = mounted && seen !== CURRENT_VERSION && !path.startsWith("/updates");
   return (
-    <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm sm:gap-1">
+    <nav className="flex min-w-0 items-center overflow-x-auto text-[13px] sm:gap-1 sm:text-sm">
       {LINKS.map((l) => {
         const active = l.href === "/" ? path === "/" || path.startsWith("/jobs") : path.startsWith(l.href);
         const dot = l.href === "/updates" && unread;
@@ -32,7 +33,7 @@ export function NavLinks() {
             href={l.href}
             aria-label={dot ? `${l.label} (new version)` : undefined}
             className={cn(
-              "relative rounded-md px-1.5 py-1.5 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground sm:px-2.5",
+              "relative rounded-md px-1 py-1.5 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground sm:px-2.5",
               active && "bg-secondary font-medium text-secondary-foreground",
             )}
           >

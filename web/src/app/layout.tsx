@@ -34,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeProvider>
           <TooltipProvider delay={350}>
             <header className="no-print sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-              <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:gap-6 sm:px-6">
+              <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-2 px-2.5 sm:gap-6 sm:px-6">
                 <Link href="/" aria-label="Karina Proofread: documents" className="flex items-center gap-2 font-serif text-[1.05rem] font-semibold tracking-tight whitespace-nowrap text-foreground sm:text-[1.15rem]">
                   <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-logo p-0.5">
                     <Image src="/icons/logo.png" alt="" width={32} height={32} priority unoptimized className="size-full object-contain" />

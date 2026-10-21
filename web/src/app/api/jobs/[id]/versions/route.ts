@@ -1,4 +1,5 @@
 import { normalizeSaved } from "@/lib/docx/normalize";
+import { countedNumber } from "@/lib/record/view";
 import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
@@ -9,7 +10,8 @@ export const runtime = "nodejs";
  * Nothing is ever overwritten, so every earlier version stays available.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const store = (await stores()).jobs;
+  const st = await stores();
+  const store = st.jobs;
   const id = (await ctx.params).id;
   const job = await store.get(id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
@@ -35,5 +37,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     updated.score = { total: score, at: new Date().toISOString() };
     await store.save(updated);
   }
-  return Response.json(updated);
+  // a manual proofread ("Proofread it myself") is counted on the Proofread record with its first saved edits
+  const counted = updated.manual && !updated.versions.some((v) => v.kind === "bot") ? await st.record.count(updated, "manual").then((n) => countedNumber(st, n)).catch(() => null) : null;
+  return Response.json(counted ? { ...updated, counted } : updated);
 }

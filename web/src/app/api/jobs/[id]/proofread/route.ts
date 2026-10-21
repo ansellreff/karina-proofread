@@ -4,6 +4,7 @@ import { systemPrompt } from "@/lib/ai/prompt";
 import { KARINA } from "@/lib/identity";
 import { proofreadDocx } from "@/lib/pipeline";
 import { proofreadScores } from "@/lib/score/job-score";
+import { countedNumber } from "@/lib/record/view";
 import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
@@ -68,7 +69,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         if (result.ai) {
           await store.logUsage({ at: updated.proofread.at, jobId: id, model: result.ai.model, costUsd: result.ai.costUsd, usage: result.ai.usage });
         }
-        send({ done: true, job: updated });
+        // the Proofread record: counted once, the first time this document is proofread (never blocks the result)
+        const counted = await st.record.count(updated, ai ? "ai" : "rules").then((n) => countedNumber(st, n)).catch(() => null);
+        send({ done: true, job: updated, counted });
       } catch (e) {
         job.status = job.versions.length > 1 ? "ready" : "new";
         await store.save(job).catch(() => {});

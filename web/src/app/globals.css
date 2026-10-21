@@ -66,6 +66,20 @@
   --shadow-color: 30 36 48;
   /* behind the logo: its navy outlines need a light ground in both themes */
   --logo: #ffffff;
+  /* Proofread record: one metal per trophy level (the same in both themes; the trophy sits in its own spotlight) */
+  --trophy-ready: #9aa3b2;
+  --trophy-first: #c4895b;
+  --trophy-bronze: #b8743f;
+  --trophy-silver: #a7b3c4;
+  --trophy-gold: #e2a72e;
+  --trophy-platinum: #8ec3d4;
+  --trophy-diamond: #5fd0f0;
+  --trophy-legend: #9a6cf2;
+  --trophy-hall: #f4c34f;
+  --trophy-ink: #1e2430;
+  --trophy-shine: #ffffff;
+  --trophy-leaf: #4f7f36;
+  --spotlight: #fff7df;
   --radius: 0.5rem;
   color-scheme: light;
 }
@@ -96,6 +110,7 @@
   --mark-foreground: #f2dc8c;
   --shadow-color: 0 0 0;
   --logo: #eef0f5;
+  --spotlight: #2a2a3d;
   color-scheme: dark;
 }
 
@@ -297,6 +312,65 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
 .superdoc-web-flow-run.track-insert-dec.hidden,
 .superdoc-web-flow-run.track-delete-dec.hidden {
   display: none;
+}
+
+/* Proofread record trophy (components/record/trophy.tsx): --metal is the level's colour. */
+.trophy-cup {
+  animation: trophy-rise 900ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  filter: drop-shadow(0 10px 14px rgb(var(--shadow-color) / 0.25));
+}
+.trophy-glow {
+  background: radial-gradient(circle, color-mix(in srgb, var(--metal) 55%, transparent), transparent 70%);
+  filter: blur(8px);
+  animation: trophy-breathe 4s ease-in-out infinite;
+}
+.trophy-rays {
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--metal) 30%, transparent) 0deg 7deg, transparent 7deg 22deg);
+  mask-image: radial-gradient(circle, black 25%, transparent 68%);
+  animation: trophy-turn 40s linear infinite;
+}
+.trophy-ring {
+  background: conic-gradient(var(--trophy-legend), var(--trophy-diamond), var(--trophy-hall), var(--trophy-legend));
+  mask-image: radial-gradient(circle, transparent 62%, black 64%, black 68%, transparent 70%);
+  animation: trophy-turn 9s linear infinite;
+}
+.trophy-sparkle {
+  color: color-mix(in srgb, var(--metal) 70%, var(--trophy-shine));
+  font-size: 1.1rem;
+  line-height: 1;
+  animation: trophy-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes trophy-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.9);
+  }
+}
+@keyframes trophy-breathe {
+  50% {
+    opacity: 0.6;
+    transform: scale(1.06);
+  }
+}
+@keyframes trophy-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes trophy-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.6) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15) rotate(20deg);
+  }
+}
+/* the celebration message slides in */
+.record-cheer {
+  animation: trophy-rise 600ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

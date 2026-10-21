@@ -41,7 +41,8 @@ export function ProofreadDialog({
   onOpenChange: (o: boolean) => void;
   aiDefault: boolean;
   hasApiKey: boolean;
-  onDone: (job: Job) => void;
+  /** `counted`: its number on the Proofread record when this proofread counted it (#n). */
+  onDone: (job: Job, counted: number | null) => void;
 }) {
   const [ai, setAi] = useState(aiDefault && hasApiKey);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
@@ -104,12 +105,12 @@ export function ProofreadDialog({
           const line = buf.slice(0, nl).trim();
           buf = buf.slice(nl + 1);
           if (!line) continue;
-          const msg = JSON.parse(line) as { stage?: string; done?: boolean; job?: Job; error?: string };
+          const msg = JSON.parse(line) as { stage?: string; done?: boolean; job?: Job; error?: string; counted?: number | null };
           if (msg.stage) setStage(msg.stage);
           if (msg.error) throw new Error(msg.error);
           if (msg.done && msg.job) {
             setStage(null);
-            onDone(msg.job);
+            onDone(msg.job, msg.counted ?? null);
             onOpenChange(false);
             return;
           }
