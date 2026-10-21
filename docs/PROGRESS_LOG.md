@@ -917,3 +917,32 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - the backup dropped onto Settings shows its contents, and restoring brings the test's deleted document back with all its versions while her documents stay exactly as they were;
   - Delete all documents stays locked until DELETE is typed (only opened and cancelled, never run).
 - Her 6 documents and her item in Recently deleted (5 days old) are untouched.
+
+## V.5.4: Update log tab, and version numbers
+**Request:** a fifth tab, "Update log", with everything built from the start, named Karina Proofread Bot V.x.y (major changes raise the first number, minor ones the second).
+
+- **Numbering (approved by Karina before building):**
+  - Major = a new way of working or a new part of the app.
+  - Minor = improvements or fixes within it.
+  - From the 29 commits:
+    - **V.1.0** the first bot (style learned, Word engine, Rules Engine), V.1.1–1.2 AI layer;
+    - **V.2.0** the web app, V.2.1–2.6;
+    - **V.3.0** the bot learns from her reviews, V.3.1 zoom;
+    - **V.4.0** online on Vercel, V.4.1–4.3;
+    - **V.5.0** Word-style reviewing, V.5.1–5.3;
+    - **V.5.4** this Update log.
+- **The tab:**
+  - "Update log" (phone: "Updates"), newest first, grouped by major version. The newest group is open, and older ones are folded to their version titles.
+  - Each version shows a Major or Minor badge, the date, a short title and plain-language points marked New / Improved / Fixed, with links to where things are in the app.
+  - A **Major versions only** switch gives a quick overview.
+- **Extras (her approval):**
+  - **Version next to the logo:** "V.5.4", which opens the Update log.
+  - **A dot on the tab** while there is a version this browser hasn't read about. It clears when the Update log is opened.
+  - **Running online:** each version shows whether it is the one the website runs (using the commit Vercel reports). If a push hasn't reached Vercel, the newest version says "Not online yet: run push.bat, or redeploy on Vercel". On this PC it says "On this computer".
+  - **Going back:** each version shows its code and "To go back to this version, ask Claude: go back to V.x.y".
+- **Standing rule (in `CLAUDE.md`):** every update adds its release to the log and raises the version; the app's own version number (`web/package.json`) is now 5.4.0.
+
+### Verified
+- 92 unit tests (4 new: the numbering rules, the version matches `package.json`, every listed commit exists in git, the running-version lookup), lint and type check pass.
+- Full end-to-end test: **70/70**. New check: the dot shows for an unread version and clears after a visit; the badge says V.5.4; the page starts at V.5.4 with "On this computer"; V.1 is folded; Major versions only lists 5.0 to 1.0.
+- **Screenshots checked:** the five tabs fit the phone header.

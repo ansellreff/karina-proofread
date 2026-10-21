@@ -15,31 +15,7 @@ export const PANE_VIEWS: { id: PaneView; label: string; hint: string }[] = [
   { id: "viewing", label: "Viewing", hint: "Read only" },
 ];
 
-/** A per-browser preference (side, width, panel open). Falls back to the default when storage is unavailable. */
-export function usePreference<T>(key: string, initial: T): [T, (v: T) => void] {
-  const [value, setValue] = useState<T>(initial);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`kp:${key}`);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after mount (no storage during SSR)
-      if (raw !== null) setValue(JSON.parse(raw) as T);
-    } catch {
-      /* private window or blocked storage */
-    }
-  }, [key]);
-  const set = useCallback(
-    (v: T) => {
-      setValue(v);
-      try {
-        localStorage.setItem(`kp:${key}`, JSON.stringify(v));
-      } catch {
-        /* ignore */
-      }
-    },
-    [key],
-  );
-  return [value, set];
-}
+export { usePreference } from "@/components/use-preference";
 
 export type PaneId = "original" | "review";
 export type Side = "left" | "right";

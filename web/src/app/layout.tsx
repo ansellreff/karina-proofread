@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CURRENT_VERSION } from "@/lib/update-log";
 import "./globals.css";
 
 const plex = IBM_Plex_Sans({ variable: "--font-plex", subsets: ["latin"], weight: ["400", "500", "600"] });
@@ -41,6 +42,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   <span className="hidden sm:inline">
                     Karina <span className="text-primary">Proofread</span>
                   </span>
+                </Link>
+                <Link
+                  href="/updates"
+                  title="Update log"
+                  aria-label={`Version ${CURRENT_VERSION}: see what changed`}
+                  data-version-badge
+                  className="-ml-1 hidden rounded-full border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground tabular-nums hover:border-primary hover:text-primary md:inline-block"
+                >
+                  V.{CURRENT_VERSION}
                 </Link>
                 <NavLinks />
                 <div className="ml-auto">

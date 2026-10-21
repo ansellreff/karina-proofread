@@ -463,7 +463,9 @@ await page.waitForTimeout(800);
 const jAfter = await insertedWith("j");
 const kAfterTyping = await activeKeyNow();
 await page.keyboard.press("Backspace");
-await page.waitForTimeout(600);
+// let the typed-and-deleted letter settle (the panel and review bar refresh shortly after editing)
+for (let i = 0; i < 20 && (await insertedWith("j")) !== jBefore; i++) await page.waitForTimeout(250);
+await page.waitForTimeout(1200);
 check("shortcuts: typing a letter in the document stays text", jAfter === jBefore + 1 && kAfterTyping === kBefore, `tracked insertions with "j": ${jBefore} -> ${jAfter}; active card ${kBefore} -> ${kAfterTyping}`);
 
 // 4e2. review bar: Next/Previous through the open changes in document order, Accept from the bar (Undo brings it back)
@@ -920,6 +922,33 @@ try {
   const printLight = await tp.evaluate(() => !document.documentElement.classList.contains("dark"));
   check("dark mode: the print view stays light", printLight);
   await tp.close();
+}
+
+// 7e. Update log: a dot on the tab for an unread version, the version beside the logo, newest first, majors only
+{
+  const up = await newPage({ width: 1280, height: 900 }); // a fresh browser: this version not read yet
+  await up.goto(`${base}/`);
+  const dot = up.locator("[data-new-dot]");
+  await dot.waitFor({ timeout: 10000 }).catch(() => {});
+  const dotBefore = await dot.isVisible();
+  const badge = ((await up.locator("[data-version-badge]").textContent()) ?? "").trim();
+  await up.getByRole("link", { name: /Update log/ }).click();
+  await up.waitForURL(/\/updates$/);
+  const current = ((await up.locator("[data-current-version]").textContent()) ?? "").trim();
+  const firstCard = await up.locator("article[data-release]").first().getAttribute("data-release");
+  const status = await up.locator("article[data-release]").first().getByText("On this computer").isVisible();
+  const folded = await up.locator('section[data-major="1"]').getByText(/^V\.1\.0/).isVisible();
+  await up.getByRole("switch", { name: "Major versions only" }).click();
+  const majors = await up.locator("[data-major-only] article[data-release]").evaluateAll((els) => els.map((e) => e.getAttribute("data-release")));
+  await up.getByRole("switch", { name: "Major versions only" }).click(); // back to the full list (remembered per browser)
+  const dotAfter = await up.locator("[data-new-dot]").count();
+  await up.screenshot({ path: path.join(out, "10-update-log.png"), fullPage: false });
+  check(
+    "Update log: dot for an unread version, version beside the logo, newest first, older majors folded, Major versions only",
+    dotBefore && badge === `V.${firstCard}` && current === `Karina Proofread Bot V.${firstCard}` && status && folded && majors.at(-1) === "1.0" && majors.every((v) => v.endsWith(".0")) && dotAfter === 0,
+    `dot ${dotBefore}->${dotAfter}, badge ${badge}, current "${current}", majors ${majors.join(" ")}`,
+  );
+  await up.close();
 }
 
 // 8. phone layout

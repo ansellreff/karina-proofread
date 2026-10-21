@@ -3,6 +3,7 @@
 Private web app that proofreads student enrollment documents (study plans, autobiographies, CVs, SOPs…) in Karina Octavia's personal review style. Plan and milestones: `docs/PROJECT_PLAN.md`.
 
 ## Tracking (Karina reads these to follow the project)
+- **Update log (every update, standing rule):** add a release at the top of `RELEASES` in `web/src/lib/update-log.ts` (plain language from her side, New/Improved/Fixed points, no student names), fill in the previous newest release's `commits` with its short hash, and set `web/package.json` (and the root entries in `package-lock.json`) `"version"` to `<major>.<minor>.0`. MAJOR = a new way of working or a new area of the app; MINOR = improvements or fixes within it. `update-log.test.ts` checks the numbering, the version match and that listed commits exist.
 - `docs/PROJECT_PLAN.md`: plan, decisions, milestone status. Update when a decision or scope changes.
 - `docs/PROGRESS_LOG.md`: append what was built, found and decided at each milestone step, in plain language. No student names.
 
