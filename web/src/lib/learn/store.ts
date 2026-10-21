@@ -11,7 +11,7 @@ const EMPTY: LearnState = { dismissed: [], examples: [] };
 const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
 
 export class LearnStore {
-  constructor(private files: AppFiles) {}
+  constructor(readonly files: AppFiles) {}
 
   private recordPath(id: string): string {
     if (!SAFE_ID.test(id)) throw new Error("Invalid record id");

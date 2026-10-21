@@ -6,13 +6,19 @@ import { DEFAULT_FILE_NAME, normalizeFormat, OLD_DEFAULT_FILE_NAME } from "../na
 import { pdfToDocx } from "../pdf/pdf-to-docx";
 import { buildContext, detectName } from "../rules/detect";
 import { readJson, readText, writeJson, type AppFiles } from "../storage/files";
-import { DEFAULT_SETTINGS, type Job, type JobStore, type Settings, type TrashEntry, type UsageEntry, type Version } from "./types";
+import { DEFAULT_SETTINGS, TRASH_DAYS, type Job, type JobStore, type Settings, type TrashEntry, type UsageEntry, type Version } from "./types";
 
 /** A proofread cut off before it finished (a server function can be stopped) is treated as not started. */
 const STALLED_MS = 6 * 60 * 1000;
 
 const ID = /^[a-f0-9-]{36}$/;
 const ENTRY = /^([a-f0-9-]{36})_(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/;
+const DAY = 86_400_000;
+/** When a trash entry ("<id>_<time>") was deleted, as an ISO date (null: not a trash entry). */
+function trashDate(entry: string): string | null {
+  const m = ENTRY.exec(entry);
+  return m ? `${m[2]}T${m[3]}:${m[4]}:${m[5]}.${m[6]}Z` : null;
+}
 
 /**
  * Jobs kept as files (a local folder or OneDrive):
@@ -124,22 +130,61 @@ export class FileJobStore implements JobStore {
     return entry;
   }
 
-  /** Recently deleted documents, newest first. */
-  async listTrash(): Promise<TrashEntry[]> {
+  /** Recently deleted documents, newest first (those older than TRASH_DAYS are deleted forever first). */
+  async listTrash(now = Date.now()): Promise<TrashEntry[]> {
+    await this.purgeExpired(now);
     const out: TrashEntry[] = [];
     for (const f of await this.files.list("trash")) {
-      const m = ENTRY.exec(f.name);
-      if (!m || !f.folder) continue;
+      const deletedAt = trashDate(f.name);
+      if (!deletedAt || !f.folder) continue;
       const job = await readJson<Job>(this.files, `trash/${f.name}/meta.json`);
-      if (job) out.push({ entry: f.name, deletedAt: `${m[2]}T${m[3]}:${m[4]}:${m[5]}.${m[6]}Z`, job });
+      if (job) out.push({ entry: f.name, deletedAt, expiresAt: new Date(Date.parse(deletedAt) + TRASH_DAYS * DAY).toISOString(), job });
     }
     return out.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
   }
 
-  /** Erase one deleted document for good (test clean-up; the app itself offers no "erase forever"). */
+  /** How many documents are in Recently deleted. */
+  async trashCount(): Promise<number> {
+    return (await this.files.list("trash")).filter((f) => f.folder && trashDate(f.name)).length;
+  }
+
+  /** Delete forever what has been in Recently deleted for TRASH_DAYS days. Returns how many. */
+  async purgeExpired(now = Date.now()): Promise<number> {
+    let n = 0;
+    for (const f of await this.files.list("trash")) {
+      const deletedAt = trashDate(f.name);
+      if (deletedAt && now - Date.parse(deletedAt) >= TRASH_DAYS * DAY && (await this.files.remove(`trash/${f.name}`))) n++;
+    }
+    return n;
+  }
+
+  /** Delete one deleted document forever. */
   async purge(entry: string): Promise<void> {
     if (!ENTRY.test(entry)) throw new Error("Unknown deleted document.");
     await this.files.remove(`trash/${entry}`);
+  }
+
+  /** Empty Recently deleted. Returns how many documents were deleted forever. */
+  async emptyTrash(): Promise<number> {
+    const n = await this.trashCount();
+    await this.files.remove("trash");
+    return n;
+  }
+
+  /**
+   * Free up space: every document and everything in Recently deleted, deleted forever. Rules, rulebook, learning,
+   * settings and the AI cost history stay. Returns how many documents there were.
+   */
+  async removeAllForever(): Promise<number> {
+    const n = (await this.list()).length + (await this.trashCount());
+    await this.files.remove("jobs");
+    await this.files.remove("trash");
+    return n;
+  }
+
+  /** Rebuild the Documents page index from the documents themselves (after a restore from a backup). */
+  async reindex(): Promise<void> {
+    await writeJson(this.files, "jobs/index.json", await this.rebuildIndex());
   }
 
   /** Put a deleted document back. */

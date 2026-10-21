@@ -12,7 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import type { Job, JobStatus, TrashEntry } from "@/lib/store/types";
+import { TRASH_DAYS, type Job, type JobStatus, type TrashEntry } from "@/lib/store/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "new" | "ready" | "done";
@@ -38,7 +48,13 @@ const scoreOf = (j: Job) => j.score?.total ?? j.proofread?.score?.original.total
 const tone = (n: number) => (n >= 85 ? "text-ins" : n >= 70 ? "text-foreground" : "text-del");
 const COLS = "sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_12.5rem_4.5rem_2.25rem]";
 
-export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[]; initialQuery: string; initialTab: Tab }) {
+/** "deleted forever in 6 days" / "tomorrow" / "today". */
+function foreverIn(expiresAt: string) {
+  const days = Math.ceil((Date.parse(expiresAt) - Date.now()) / 86_400_000);
+  return days <= 0 ? "deleted forever today" : days === 1 ? "deleted forever tomorrow" : `deleted forever in ${days} days`;
+}
+
+export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { jobs: Job[]; trashCount: number; initialQuery: string; initialTab: Tab }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -47,6 +63,14 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
   const [renaming, setRenaming] = useState<Job | null>(null);
   const [trash, setTrash] = useState<TrashEntry[] | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [trashTotal, setTrashTotal] = useState(trashCount);
+  const [seenCount, setSeenCount] = useState(trashCount);
+  if (seenCount !== trashCount) {
+    // the server's count after a refresh (a delete or restore elsewhere)
+    setSeenCount(trashCount);
+    setTrashTotal(trashCount);
+  }
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: "one"; entry: TrashEntry } | { kind: "all" } | null>(null);
 
   const keepInUrl = (q: string, t: Tab) => {
     const url = new URL(window.location.href);
@@ -67,7 +91,21 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
     return list;
   }, [visible, tab, query, sort]);
 
-  const loadTrash = async () => setTrash((await (await fetch("/api/trash", { cache: "no-store" })).json()) as TrashEntry[]);
+  const loadTrash = async () => {
+    const list = (await (await fetch("/api/trash", { cache: "no-store" })).json()) as TrashEntry[];
+    setTrash(list);
+    setTrashTotal(list.length);
+  };
+
+  async function deleteForever() {
+    const c = confirmDelete;
+    setConfirmDelete(null);
+    if (!c) return;
+    const res = await fetch(c.kind === "one" ? `/api/trash/${encodeURIComponent(c.entry.entry)}` : "/api/trash", { method: "DELETE" });
+    if (!res.ok) return toast.error("Could not delete.");
+    toast.success(c.kind === "one" ? "Deleted forever" : "Recently deleted is empty");
+    void loadTrash();
+  }
 
   async function setStatus(job: Job, status: JobStatus) {
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
@@ -244,43 +282,82 @@ export function DocumentsList({ jobs, initialQuery, initialTab }: { jobs: Job[];
       </section>
 
       <section className="mt-6" aria-label="Recently deleted">
-        <button
-          type="button"
-          aria-expanded={trashOpen}
-          onClick={() => {
-            setTrashOpen(!trashOpen);
-            if (!trashOpen) void loadTrash();
-          }}
-          className="inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-        >
-          <ChevronDown className={cn("size-4 transition-transform", !trashOpen && "-rotate-90")} /> Recently deleted
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button
+            type="button"
+            aria-expanded={trashOpen}
+            onClick={() => {
+              setTrashOpen(!trashOpen);
+              if (!trashOpen) void loadTrash();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <ChevronDown className={cn("size-4 transition-transform", !trashOpen && "-rotate-90")} /> Recently deleted
+            {trashTotal > 0 && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{trashTotal}</span>}
+          </button>
+          <p className="text-xs text-muted-foreground">Deleted documents are kept here for {TRASH_DAYS} days, then deleted forever.</p>
+        </div>
         {trashOpen && (
           <div className="mt-2 overflow-hidden rounded-lg border bg-card">
             {trash === null ? (
               <p className="px-5 py-4 text-sm text-muted-foreground">Loading…</p>
             ) : trash.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted-foreground">Nothing deleted. Deleted documents stay here so you can bring them back.</p>
+              <p className="px-5 py-4 text-sm text-muted-foreground">Nothing deleted. A deleted document stays here for {TRASH_DAYS} days so you can bring it back.</p>
             ) : (
-              <ul className="divide-y">
-                {trash.map((t) => (
-                  <li key={t.entry} className="flex items-center gap-3 px-5 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{t.job.studentName ?? "Unnamed student"}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {t.job.docType === "Unknown" ? "Document" : t.job.docType}, deleted {new Date(t.deletedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => restore(t.entry)}>
-                      <ArchiveRestore /> Restore
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-2">
+                  <p className="text-xs text-muted-foreground">Restore a document to bring it back, or delete it forever now to free up space.</p>
+                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete({ kind: "all" })}>
+                    <Trash2 /> Empty Recently deleted
+                  </Button>
+                </div>
+                <ul className="divide-y">
+                  {trash.map((t) => (
+                    <li key={t.entry} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{t.job.studentName ?? "Unnamed student"}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {t.job.docType === "Unknown" ? "Document" : t.job.docType}, deleted {new Date(t.deletedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          {", "}
+                          <span data-expires>{foreverIn(t.expiresAt)}</span>
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="outline" onClick={() => restore(t.entry)}>
+                          <ArchiveRestore /> Restore
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete({ kind: "one", entry: t })}>
+                          <Trash2 /> Delete forever
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         )}
       </section>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDelete?.kind === "one" ? `Delete “${confirmDelete.entry.job.studentName ?? confirmDelete.entry.job.fileName}” forever?` : `Delete all ${trash?.length ?? trashTotal} documents in Recently deleted forever?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete?.kind === "one" ? "The document and all its versions" : "These documents and all their versions"} are removed for good and can’t be restored, unless they are in a backup you downloaded
+              (Settings → Backup).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void deleteForever()}>
+              Delete forever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <RenameDialog job={renaming} onClose={() => setRenaming(null)} onSaved={() => router.refresh()} />
     </>

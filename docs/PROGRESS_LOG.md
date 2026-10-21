@@ -876,3 +876,44 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - dragging the balloons edge widens the column, the page makes room, and double-click resets it;
   - the logo loads in the header on its light ground in dark mode, and serves as the browser-tab icon.
 - Screenshots checked in light and dark.
+
+## Recently deleted for 7 days, and backup and restore
+**Request:**
+- a way to delete Recently deleted documents forever;
+- deleted documents kept for 7 days, then deleted forever, with a note next to Recently deleted saying so;
+- a backup she can save on her computer and restore later by dropping a single file onto the page, so she can clear the online storage when it fills up.
+
+### Recently deleted
+- **Before:** deleted documents stayed in Recently deleted for ever, and there was no button to delete them for good.
+- **7 days, then gone:** a deleted document is kept for **7 days**, then deleted forever. This happens whenever the Documents page or Recently deleted is opened, so no background job is needed. Next to the Recently deleted heading: "Deleted documents are kept here for 7 days, then deleted forever." Each document shows when it goes, for example "deleted forever in 6 days".
+- **Delete forever** on each document, and **Empty Recently deleted** for all of them, each with a confirmation that mentions the backup.
+- **Count:** the heading shows how many documents are in Recently deleted.
+
+### Backup and storage (Settings)
+- **What's stored:** how much the app stores now (documents, Recently deleted), and online a reminder that the free database plan holds about 0.5 GB.
+- **Download backup:**
+  - One .zip file (`KarinaProofread-backup-<date>.zip`) with every document and all its versions (and the student's PDF), the review rules and rulebook, what the bot learned, the settings and the AI cost history.
+  - Recently deleted is not included.
+  - It contains students' documents, and the page says to keep it somewhere private.
+- **Restore:** drop the backup file onto the drop area (or click to choose it). Nothing changes until she confirms. First a box shows what is in it (date, number of documents, learned reviews, size).
+  - **Adds, never overwrites:** documents not in the app come back with all their versions. Documents already in the app, or in Recently deleted, are left as they are, so an old backup can't overwrite newer work. Learned reviews are added, and the AI cost history is merged.
+  - **Rules, rulebook and settings** are put back only if she switches on "Also put back the review rules, rulebook and settings" (off by default, because they replace the current ones).
+- **Free up space → Delete all documents:**
+  - Every document and Recently deleted are deleted forever, while rules, rulebook, learning and settings are kept.
+  - The confirmation offers "Download a backup first" and only works after typing DELETE.
+- **Large backups:** the download is streamed, so a large backup isn't cut off by Vercel's response size limit.
+
+### Verified
+- 88 unit tests (5 new):
+  - the 7-day removal (kept on day 6, gone on day 7);
+  - delete forever, one or all;
+  - a backup restored into an empty app (documents with versions, learning, settings, rules, costs);
+  - restoring never overwrites newer work and leaves settings alone unless asked;
+  - free up space keeps rules and learning;
+  - a wrong file is refused.
+- Full end-to-end test: **69/69**. New checks:
+  - the backup zip's contents;
+  - the 7-day note and countdown, and Delete forever;
+  - the backup dropped onto Settings shows its contents, and restoring brings the test's deleted document back with all its versions while her documents stay exactly as they were;
+  - Delete all documents stays locked until DELETE is typed (only opened and cancelled, never run).
+- Her 6 documents and her item in Recently deleted (5 days old) are untouched.

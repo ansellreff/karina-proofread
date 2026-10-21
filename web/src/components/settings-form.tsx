@@ -4,6 +4,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { AiLockSection } from "@/components/ai-unlock";
+import { BackupSection } from "@/components/backup-section";
 import { FileNameSection } from "@/components/file-name-format";
 import { Segmented } from "@/components/rules/bits";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
@@ -133,6 +134,7 @@ export function SettingsForm() {
         </Field>
       </section>
       <FileNameSection value={s.fileName} onChange={(fileName) => setS({ ...s, fileName })} />
+      <BackupSection />
       <AiLockSection />
 
       <section className="space-y-5 rounded-lg border bg-card p-5">

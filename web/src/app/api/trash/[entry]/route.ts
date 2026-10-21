@@ -2,7 +2,7 @@ import { stores } from "@/lib/storage/stores";
 
 export const runtime = "nodejs";
 
-/** Erase one deleted document for good. Used by the test script to clean up its own test documents. */
+/** Delete one deleted document forever (Recently deleted → Delete forever; also the test clean-up). */
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/trash/[entry]">) {
   const store = (await stores()).jobs; // outside try: a sign-in redirect must not be caught
   try {

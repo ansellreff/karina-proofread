@@ -808,6 +808,77 @@ try {
   await dp.waitForTimeout(1200);
   const restoredBack = (await fetch(`${base}/api/jobs/${job.id}`)).ok;
   check("documents page: delete can be undone, and restored from Recently deleted", backAfterUndo && goneAfterDelete && restoredBack, `undo ${backAfterUndo}, deleted ${goneAfterDelete}, restored ${restoredBack}`);
+
+  // 7c2. backup -> delete this test's document forever -> drop the backup on Settings -> it is back (nothing else touched)
+  const countJobs = async () => ((await (await fetch(`${base}/api/jobs`)).json()) ?? []).length;
+  const jobsBefore = await countJobs();
+  const versionsBefore = (await (await fetch(`${base}/api/jobs/${job.id}`)).json()).versions.length;
+  const backupRes = await fetch(`${base}/api/backup`);
+  const backup = new Uint8Array(await backupRes.arrayBuffer());
+  const bzip = await JSZip.loadAsync(backup);
+  const manifest = JSON.parse(await bzip.file("manifest.json").async("string"));
+  const backupOk = /attachment; filename="KarinaProofread-backup-\d{4}-\d{2}-\d{2}\.zip"/.test(backupRes.headers.get("content-disposition") ?? "")
+    && manifest.documents.some((d) => d.id === job.id) && !!bzip.file(`data/jobs/${job.id}/meta.json`) && !!bzip.file("config/karina-rules.json")
+    && !Object.keys(bzip.files).some((p) => p.startsWith("data/trash/"));
+  check("backup: one zip with every document (all versions), rules and settings, no Recently deleted", backupOk, `${manifest.counts?.documents} documents, ${Math.round(backup.byteLength / 1024)} KB`);
+
+  await actions().click();
+  await dp.getByRole("menuitem", { name: "Delete" }).click();
+  for (let i = 0; i < 30 && (await fetch(`${base}/api/jobs/${job.id}`)).ok; i++) await dp.waitForTimeout(500);
+  await dp.waitForTimeout(800);
+  const row = dp.locator('section[aria-label="Recently deleted"] li').filter({ hasText: name }).first();
+  await row.waitFor({ timeout: 10000 });
+  const countdown = (await row.locator("[data-expires]").textContent()) ?? "";
+  const note = await dp.getByText(/kept here for 7 days, then deleted forever/).isVisible();
+  await row.getByRole("button", { name: "Delete forever" }).click();
+  await dp.getByRole("alertdialog").getByRole("button", { name: "Delete forever" }).click();
+  await dp.waitForTimeout(1200);
+  const inTrash = ((await (await fetch(`${base}/api/trash`)).json()) ?? []).some((t) => t.job.id === job.id);
+  const rowGone = (await row.count()) === 0;
+  check("Recently deleted: 7-day note and countdown; Delete forever removes the document for good", note && /deleted forever in 7 days/.test(countdown) && !inTrash && rowGone && (await fetch(`${base}/api/jobs/${job.id}`)).status === 404, `"${countdown}", note ${note}, still in trash ${inTrash}`);
+
+  const sp = await newPage({ width: 1280, height: 900 });
+  await sp.goto(`${base}/settings`);
+  const drop = sp.locator("[data-restore-drop]");
+  await drop.waitFor({ timeout: 20000 });
+  const storageShown = await sp.locator("[data-storage]").getByText(/stored on this computer/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  // drag and drop the backup file onto the page
+  const dt = await sp.evaluateHandle((b64) => {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const t = new DataTransfer();
+    t.items.add(new File([bytes], "KarinaProofread-backup.zip", { type: "application/zip" }));
+    return t;
+  }, Buffer.from(backup).toString("base64"));
+  await drop.dispatchEvent("dragover", { dataTransfer: dt });
+  await drop.dispatchEvent("drop", { dataTransfer: dt });
+  const dialog = sp.getByRole("dialog", { name: /Restore this backup/ });
+  await dialog.waitFor({ timeout: 15000 });
+  const summary = (await dialog.textContent()) ?? "";
+  await dialog.getByRole("button", { name: "Restore" }).click();
+  let restored = false;
+  for (let i = 0; i < 40 && !restored; i++) {
+    await sp.waitForTimeout(500);
+    restored = (await fetch(`${base}/api/jobs/${job.id}`)).ok;
+  }
+  const versionsAfter = restored ? (await (await fetch(`${base}/api/jobs/${job.id}`)).json()).versions.length : 0;
+  const toastText = (await sp.locator("[data-sonner-toast]").first().textContent().catch(() => "")) ?? "";
+  check(
+    "backup: drop the file on Settings, see what is in it, restore: the deleted document is back; nothing else changes",
+    storageShown && /documents?/.test(summary) && restored && versionsAfter === versionsBefore && (await countJobs()) === jobsBefore && /1 document added/.test(toastText),
+    `${toastText.slice(0, 120)} | versions ${versionsBefore} -> ${versionsAfter}, documents ${jobsBefore} -> ${await countJobs()}`,
+  );
+  // Free up space: the confirmation needs DELETE typed (opened and cancelled only: never run against real data)
+  await sp.getByRole("button", { name: /Delete all documents/ }).click();
+  const confirmBtn = sp.getByRole("alertdialog").getByRole("button", { name: /Delete all forever/ });
+  const lockedEmpty = await confirmBtn.isDisabled();
+  await sp.getByRole("textbox", { name: "Type DELETE to confirm" }).fill("DELET");
+  const lockedTypo = await confirmBtn.isDisabled();
+  await sp.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+  check("free up space: Delete all documents stays locked until DELETE is typed (cancelled here)", lockedEmpty && lockedTypo && (await countJobs()) === jobsBefore);
+  await sp.screenshot({ path: path.join(out, "09-backup.png") });
+  await sp.close();
   await dp.close();
   await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: job.studentName }) });
 }

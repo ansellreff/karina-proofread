@@ -72,10 +72,15 @@ export const DEFAULT_SETTINGS: Settings = {
   fileName: DEFAULT_FILE_NAME,
 };
 
+/** Days a deleted document stays in Recently deleted before it is deleted forever. */
+export const TRASH_DAYS = 7;
+
 /** A deleted document, kept so it can be restored. */
 export interface TrashEntry {
   entry: string;
   deletedAt: string;
+  /** When it is deleted forever (deletedAt + TRASH_DAYS). */
+  expiresAt: string;
   job: Job;
 }
 

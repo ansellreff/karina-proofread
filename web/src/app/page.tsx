@@ -7,7 +7,9 @@ export const metadata = { title: "Documents" };
 
 export default async function Inbox(props: PageProps<"/">) {
   const params = await props.searchParams;
-  const jobs = await (await stores()).jobs.list();
+  const store = (await stores()).jobs;
+  await store.purgeExpired().catch(() => 0); // Recently deleted keeps documents TRASH_DAYS days
+  const [jobs, trashCount] = await Promise.all([store.list(), store.trashCount()]);
   const waiting = jobs.filter((j) => j.status === "new").length;
   const ready = jobs.filter((j) => j.status === "ready").length;
   const q = typeof params.q === "string" ? params.q : "";
@@ -26,7 +28,7 @@ export default async function Inbox(props: PageProps<"/">) {
         </p>
       </div>
       <UploadZone />
-      <DocumentsList jobs={jobs} initialQuery={q} initialTab={status} />
+      <DocumentsList jobs={jobs} trashCount={trashCount} initialQuery={q} initialTab={status} />
     </main>
   );
 }
