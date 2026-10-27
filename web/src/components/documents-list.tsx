@@ -3,7 +3,7 @@
 import { ArchiveRestore, CheckCircle2, ChevronDown, Download, ExternalLink, MoreHorizontal, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { toastDone, type Learned } from "@/components/done-toast";
 import { NativeSelect } from "@/components/rules/bits";
@@ -36,17 +36,23 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 const inTab = (j: Job, t: Tab) => t === "all" || j.status === t || (t === "new" && j.status === "proofreading");
 
-function when(iso: string) {
+/**
+ * Last updated, as Karina reads dates: "Tue, 2026/10/27". In UTC while rendering on the server (online it runs in
+ * UTC), in her own time zone once in the browser, so the two never disagree.
+ */
+export function when(iso: string, local = true) {
   const d = new Date(iso);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days === 0) return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  if (days < 7) return d.toLocaleDateString("en-GB", { weekday: "short" });
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const timeZone = local ? undefined : "UTC";
+  const weekday = d.toLocaleDateString("en-GB", { weekday: "short", timeZone });
+  const [y, m, day] = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(d).split("-");
+  return `${weekday}, ${y}/${m}/${day}`;
 }
+/** The exact time, on hover. */
+const whenExactly = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const scoreOf = (j: Job) => j.score?.total ?? j.proofread?.score?.original.total ?? null;
 const tone = (n: number) => (n >= 85 ? "text-ins" : n >= 70 ? "text-foreground" : "text-del");
-const COLS = "sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_12.5rem_4.5rem_2.25rem]";
+const COLS = "sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_12.5rem_7.25rem_2.25rem]";
 
 /** "deleted forever in 6 days" / "tomorrow" / "today". */
 function foreverIn(expiresAt: string) {
@@ -56,6 +62,7 @@ function foreverIn(expiresAt: string) {
 
 export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { jobs: Job[]; trashCount: number; initialQuery: string; initialTab: Tab }) {
   const router = useRouter();
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [sort, setSort] = useState<Sort>("updated");
@@ -241,9 +248,13 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
                           <span className={cn("font-serif text-sm font-semibold", tone(score))}>{score}</span>
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground sm:hidden">{when(job.updatedAt)}</span>
+                      <span className="text-xs text-muted-foreground sm:hidden" title={mounted ? whenExactly(job.updatedAt) : undefined}>
+                        {when(job.updatedAt, mounted)}
+                      </span>
                     </div>
-                    <span className="hidden text-right text-sm text-muted-foreground tabular-nums sm:block">{when(job.updatedAt)}</span>
+                    <span className="hidden text-right text-sm whitespace-nowrap text-muted-foreground tabular-nums sm:block" title={mounted ? whenExactly(job.updatedAt) : undefined}>
+                      {when(job.updatedAt, mounted)}
+                    </span>
                   </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Actions for ${job.studentName ?? job.fileName}`} />}>

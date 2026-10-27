@@ -35,6 +35,28 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.1",
+    date: "2026-10-27",
+    kind: "minor",
+    title: "Contractions rule built in, clearer dates",
+    summary: "Your “Change contraction words” rule now comes with the app, and the Documents list shows full dates.",
+    points: [
+      {
+        kind: "improved",
+        text: "The Documents list shows when each document was last updated as a full date, like Tue, 2026/10/27. Hover over it for the exact time.",
+        href: "/",
+        where: "Documents",
+      },
+      {
+        kind: "new",
+        text: "“Change contraction words” is one of the rules that come with the app: the AI suggests full forms (I’m → I am, didn’t → did not, can’t → cannot) in every type of document.",
+        href: "/rules",
+        where: "Review rules → Your rules",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.0",
     date: "2026-10-21",
     kind: "major",
@@ -48,7 +70,7 @@ export const RELEASES: Release[] = [
       { kind: "improved", text: "Finished documents stay on your record for good, even after they are deleted. A document deleted before it was finished stops counting, so Worked on is only what you can still finish." },
       { kind: "new", text: "Levels, totals per method and document type, a 12-month chart and the full list. The record is part of your backups." },
     ],
-    commits: [],
+    commits: ["9544402"],
   },
   {
     version: "5.4",

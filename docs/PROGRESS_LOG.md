@@ -1004,3 +1004,19 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - **Verified:**
   - unit test: delete an unfinished document (not counted), restore it (counted), delete it for good (removed), and the 7-day cleanup case; a finished one deleted stays;
   - e2e: the test's own unfinished document lowers Worked on by 1 in Recently deleted, then leaves the record when deleted forever.
+
+## V.6.1: "Change contraction words" comes with the app (2026-10-27)
+**Request:** Karina added a rule on the website (Review rules → Your rules, action "Tell the AI", all document types) and wants it built in as a default, next to the five rules that already come with the app.
+
+- **The rule:** "Change contraction words", for the AI, on every document type. Instruction: suggest full forms instead of contractions in formal writing (I'm → I am, he's → he is, didn't → did not, can't → cannot…).
+- **Where it was added:**
+  - the app's factory defaults (`lib/rules/config.ts`), so "reset to defaults" includes it;
+  - the rules file (`prompts/karina-rules.json`), used on this PC and online as the default until she saves her own rules.
+- **Online:** her saved rules already contain it (she added it there), so nothing doubles up.
+- **Note:** like every "Tell the AI" rule, it only applies when a document is proofread with AI.
+- **Verified:** a new unit test checks that the rule is in both places, valid, and on every document type, and that six rules come with the app. 100 unit tests, lint and type check pass.
+- **Also in V.6.1 (her request): dates on the Documents list.**
+  - The "Updated" column now always shows the day and the full date: **Tue, 2026/10/27**. Before, it showed a time for today, a weekday for this week, and "27 Oct" for older ones.
+  - Hovering shows the exact time; the column was widened to fit.
+  - The server writes dates in UTC and the browser in her own time zone, so they never disagree.
+  - Checked on the local app, on desktop and phone, with no errors.

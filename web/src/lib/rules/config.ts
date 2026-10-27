@@ -243,6 +243,11 @@ export const DEFAULT_RULES: RuleConfig = {
       find: "your university; your campus",
       text: "mention the university name, example: at National Taiwan University (NTU)",
     }),
+    rule({
+      label: "Change contraction words",
+      action: "ai",
+      text: "Add a suggestion to change contractions to their full forms.\nWhile writing a formal document, it is preferred to use a full form word instead of shorten/contracted form.\nFor example, instead of I'm, it should be I am; he's should be he is; didn't should be did not; can't should be cannot, etc.",
+    }),
   ],
   lists: {
     indonesianUniversities: [
