@@ -12,7 +12,7 @@ export function PrintView({ jobId, version, fileName, title, markup }: { jobId: 
 
   useEffect(() => {
     document.title = title; // becomes the suggested PDF file name
-    fetch(`/api/jobs/${jobId}/file?v=${version}`)
+    fetch(`/api/jobs/${jobId}/file?v=${version}&view=editor`)
       .then((r) => r.blob())
       .then((b) => setFile(new File([b], fileName)));
   }, [jobId, version, fileName, title]);

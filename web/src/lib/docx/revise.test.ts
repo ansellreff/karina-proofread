@@ -109,6 +109,33 @@ describe("Reviser text edits", () => {
     const ids = revs.map((e) => e.getAttribute("w:id"));
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("spreads the times like a real review session ending now: reading order, one moment per edit", () => {
+    const long = "Lorem ipsum dolor sit amet. ".repeat(200); // ~5,600 characters: a few minutes of reading
+    const doc = parseXml(docXml(para(run("Name : Sinta. Thesis : AI.")) + para(run(long)) + para(run("Last line : done."))));
+    const [first, , last] = bodyParagraphs(doc).map((p) => p.el);
+    const r = new Reviser(doc, ID, NOW);
+    r.formatParagraph(first, { jc: "both" });
+    const late = r.capture(() => r.replace(last, 9, 11, ":"));
+    const early = r.capture(() => r.replace(first, 4, 6, ":"));
+    const replaced = r.capture(() => r.replace(first, 15, 26, "Thesis: Artificial Intelligence."));
+    let i = 0;
+    r.spreadTimes(() => [0.5, 0.2, 0.9, 0.4][i++ % 4]);
+    const byId = (id: string) => [...wDescendants(doc, "ins"), ...wDescendants(doc, "del")].find((e) => e.getAttribute("w:id") === id)!;
+    const utc = (id: string) => Date.parse(byId(id).getAttribute("w16du:dateUtc")!);
+    const format = Date.parse(wDescendants(doc, "pPrChange")[0].getAttribute("w16du:dateUtc")!);
+    // formatting first, then the edits in reading order (not the order they were written), the last one at "now"
+    expect(format).toBeLessThanOrEqual(utc(early[0])); // Word stamps to the minute: the same minute is fine
+    expect(utc(early[0])).toBeLessThanOrEqual(utc(replaced[0]));
+    expect(utc(replaced[0])).toBeLessThan(utc(late[0]));
+    expect(utc(late[0])).toBe(Date.parse("2026-10-16T05:33:00Z"));
+    // reading the long paragraph takes minutes; a replacement's deletion and insertion share one moment
+    expect(utc(late[0]) - utc(replaced[0])).toBeGreaterThanOrEqual(3 * 60_000);
+    expect(new Set(replaced.map(utc)).size).toBe(1);
+    // the local w:date stays 8 hours ahead of the UTC copy, Word's way
+    expect(Date.parse(byId(late[0]).getAttribute("w:date")!) - utc(late[0])).toBe(8 * 3_600_000);
+    expect(utc(early[0])).toBeGreaterThan(NOW.getTime() - 150 * 60_000);
+  });
 });
 
 describe("Reviser paragraphs", () => {

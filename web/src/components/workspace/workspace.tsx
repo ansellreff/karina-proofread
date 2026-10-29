@@ -248,7 +248,7 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   useEffect(() => {
     let cancelled = false;
     sd.current = null;
-    fetch(`/api/jobs/${job.id}/file?v=${loaded}`, { cache: "no-store" })
+    fetch(`/api/jobs/${job.id}/file?v=${loaded}&view=editor`, { cache: "no-store" }) // dates readable as written (lib/docx/dates.ts)
       .then((r) => {
         if (!r.ok) throw new Error("The document file could not be loaded.");
         return r.blob();

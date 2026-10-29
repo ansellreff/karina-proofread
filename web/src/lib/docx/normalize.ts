@@ -1,11 +1,12 @@
 import { KARINA } from "../identity";
+import { datesToWord } from "./dates";
 import { finalizeMetadata } from "./metadata";
 import { DocxPackage } from "./package";
 
 /**
  * A document saved from the in-app editor gets the same treatment as a bot output:
- * Word-identical metadata (application, last modified by, track changes on, author entry)
- * and no editor-specific traces.
+ * Word-identical metadata (application, last modified by, track changes on, author entry),
+ * tracked-change dates in Word's form (lib/docx/dates.ts) and no editor-specific traces.
  */
 export async function normalizeSaved(saved: Uint8Array, original: Uint8Array, author = KARINA.author): Promise<Uint8Array> {
   const pkg = await DocxPackage.load(saved);
@@ -33,6 +34,9 @@ export async function normalizeSaved(saved: Uint8Array, original: Uint8Array, au
       if (/superdoc|harbour/i.test(p.getAttribute("name") ?? "")) p.parentNode!.removeChild(p);
     }
   }
+
+  // Dates in Word's form: the editor's copy had them without "Z", and its own edits are stamped in UTC.
+  await datesToWord(pkg, KARINA.utcOffsetMinutes);
 
   await finalizeMetadata(pkg, { ...KARINA, author });
   return pkg.save();

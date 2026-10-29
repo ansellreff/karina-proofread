@@ -35,6 +35,28 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.3",
+    date: "2026-10-30",
+    kind: "minor",
+    title: "Right times on tracked changes",
+    summary: "Balloons show the real time of each change, your own edits get Word’s time stamps, and the bot’s changes are spread over a review session.",
+    points: [
+      {
+        kind: "fixed",
+        text: "The balloons showed every change 8 hours late. Word writes your local time in a way the editor misread; it now shows the time exactly as Word does.",
+      },
+      {
+        kind: "fixed",
+        text: "Edits you make in the app were stamped in another time zone, so Word showed them 8 hours early. They are now saved the way Word saves them. Older saved versions are corrected when you download them.",
+      },
+      {
+        kind: "improved",
+        text: "The bot’s changes no longer all carry the same minute: they follow a review session that ends when the proofread finishes. Formatting comes first, then each change in reading order, the gaps depending on how much text lies between them and how much is typed.",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.2",
     date: "2026-10-29",
     kind: "minor",
@@ -66,7 +88,7 @@ export const RELEASES: Release[] = [
         where: "Documents",
       },
     ],
-    commits: [],
+    commits: ["3a80104"],
   },
   {
     version: "6.1",

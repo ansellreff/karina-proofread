@@ -74,6 +74,7 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - SuperDoc v2 (`@superdoc/react`): document API is async (`activeEditor.doc.*` returns promises); `viewing.trackedChanges` must be `'markup'|'final'|'original'`; telemetry must stay `{ enabled: false }`.
 - CSP in `next.config.ts` keeps the browser on `connect-src 'self'`.
 - Editor saves go through `lib/docx/normalize.ts` (Word-identical metadata, no editor traces).
+- Dates (`lib/docx/dates.ts`): Word's `w:date` is LOCAL time + "Z" (true UTC in `w16du:dateUtc`); SuperDoc reads the "Z" as UTC. Anything SuperDoc opens must use `file?…&view=editor` (dates without "Z"); `normalizeSaved` and downloads put them back in Word's form (editor-made UTC-with-ms dates → local + UTC copy). Bot output times: `Reviser.spreadTimes` (a review session ending at the proofread time, reading order, formatting first).
 
 ## Engine
 - `web/src/lib/docx/` — OOXML engine (accept/reject, tracked insert/delete/format, Word-exact metadata). Element order in rPr/pPr matters (Word rejects out-of-order).

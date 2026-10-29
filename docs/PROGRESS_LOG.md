@@ -1059,4 +1059,32 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - the column layout starts from 768 px wide; narrower screens (phones, tablets upright) show each document as a card: name and type on top, file name and date under them, then status and score;
   - the score chip ("70 → 71") never breaks onto two lines;
   - checked with screenshots at 1440, 1100, 800 and 390 px wide, light and dark, with no sideways scrolling.
+
+## V.6.3: right times on tracked changes (2026-10-30)
+**Request:** Karina noticed the time on the balloons after an AI proofread looked wrong, and asked whether it was our script or the AI. She also asked that the changes don't all carry the same minute, but follow a believable review session.
+
+- **Not the AI's fault:** the AI never sets times; our script stamps every change when it writes the Word file.
+- **What was wrong (measured in the app, Taiwan time):**
+
+  | | Time |
+  |---|---|
+  | Proofread finished | 01:37 |
+  | In the file: Word's local time (`w:date`) | 01:37 ✔ |
+  | In the file: true UTC (`w16du:dateUtc`) | 17:37 the day before ✔ |
+  | Balloon in the app | **09:37 ✘** (8 hours late) |
+
+  - **Cause:** Word writes the reviewer's local time followed by a "Z" (which normally means UTC). The in-app editor (SuperDoc) took the "Z" literally and added Taiwan's 8 hours again. The Word file itself was right: Word shows 01:37.
+  - **A second, mirror-image problem:** edits Karina made in the app were saved in true UTC with milliseconds and no UTC copy. Word would show them 8 hours early, and the milliseconds were a small editor trace.
+- **Fix** (`lib/docx/dates.ts`):
+  - the editor opens a copy with the "Z" removed from the dates (`?view=editor`), so it shows the time as written, like Word. Checked: the balloon then shows 01:40 for a change at 01:40;
+  - on save (`normalizeSaved`), the "Z" goes back on untouched changes (the editor writes them back exactly as it received them), and the editor's own edits become local time + "Z" with the true UTC copy, to the minute, like Word;
+  - downloads apply the same, so versions saved before the fix open at the right time in Word.
+- **Spread over a review session** (`Reviser.spreadTimes`, run at the end of every bot proofread, AI or not):
+  - the session ends when the proofread finishes, never in the future;
+  - the formatting pass (font, spacing) comes first, as one select-all step;
+  - each edit follows in reading order, not in the order the bot wrote them. The gap is the reading time for the text since the previous edit (about 230 words a minute), plus 0.3 to 1.5 minutes to think, plus the typing time for inserted text and notes (about 180 characters a minute);
+  - a replacement's deletion and insertion share one moment; changes in the same minute share Word's minute stamp, as in her own reviews;
+  - a very long review is compressed to fit 2.5 hours.
+  - **Example** (a CV with 11 changes): from 01:23 to 01:45, with 13 different minute stamps.
+- **Verified:** new unit tests (dates both ways; the session order and gaps). In the app: proofread → balloons show the file's times in a Taiwan-time browser → typed edit saved as 01:45 with its UTC copy → download is in Word's form.
 - **Verified:** new unit tests for the hidden-characters rule and for names; all unit tests, lint and the type check pass.

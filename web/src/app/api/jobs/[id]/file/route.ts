@@ -1,4 +1,6 @@
 import { cleanCopy } from "@/lib/docx/clean";
+import { forEditor, toWord } from "@/lib/docx/dates";
+import { KARINA } from "@/lib/identity";
 import { doneFileName } from "@/lib/naming";
 import { stores } from "@/lib/storage/stores";
 
@@ -8,7 +10,8 @@ const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 /**
  * GET ?v=<n|current>&download=tracked|clean
- * Without `download`: the raw version for the editor. With it: named as set in Settings → Export file name.
+ * Without `download`: the stored version. With it: named as set in Settings → Export file name, dates in Word's form.
+ * &view=editor: the copy the in-app editor opens, its dates readable as written (lib/docx/dates.ts).
  * GET ?source=1: the file exactly as the student sent it (the PDF, for documents converted from PDF).
  */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -29,8 +32,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   let data = await store.readVersion(job.id, n);
   const download = url.searchParams.get("download");
   const headers: Record<string, string> = { "Content-Type": DOCX, "Cache-Control": "no-store" };
+  if (url.searchParams.get("view") === "editor") data = await forEditor(data, KARINA.utcOffsetMinutes);
   if (download === "clean") data = await cleanCopy(data);
   if (download) {
+    data = await toWord(data, KARINA.utcOffsetMinutes);
     const name = doneFileName(job, "docx", (await store.getSettings()).fileName);
     headers["Content-Disposition"] = `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
   }

@@ -13,7 +13,7 @@ export function OriginalPane({ jobId, fileName, userName, reflow, onReady }: { j
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/jobs/${jobId}/file?v=0`, { cache: "no-store" })
+    fetch(`/api/jobs/${jobId}/file?v=0&view=editor`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error("The original file could not be loaded.");
         return r.blob();

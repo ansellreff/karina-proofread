@@ -1,11 +1,10 @@
+import { ensureW16du, w3c } from "./dates";
 import { paragraphAtoms, paragraphRuns } from "./paragraphs";
 import {
-  MC_NS,
   PPR_ORDER,
   RPR_ORDER,
   W16DU_NS,
   W_NS,
-  XMLNS_NS,
   ensureFirstChild,
   getW,
   insertAfter,
@@ -36,17 +35,23 @@ export interface NewParagraph {
   template?: Element;
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-function w3c(d: Date): string {
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00Z`;
-}
+/** Reading speed for the review session: about 230 words a minute. */
+const READ_CHARS_PER_MINUTE = 1300;
+/** Typing speed for inserted text and notes. */
+const TYPE_CHARS_PER_MINUTE = 180;
+/** A long review still fits in one sitting. */
+const MAX_SESSION_MINUTES = 150;
 
 /** Writes tracked changes into word/document.xml the way Word records them. */
 export class Reviser {
   private nextId: number;
-  private readonly localDate: string;
-  private readonly utcDate: string;
+  private readonly utcOffsetMinutes: number;
+  private readonly now: Date;
   private readonly useDateUtc: boolean;
+  /** Every revision written, with the edit it belongs to (0 = the formatting pass). */
+  private readonly groupOf = new Map<Element, number>();
+  private groups = 0;
+  private group = 0;
 
   constructor(private doc: Document, identity: Identity, now = new Date()) {
     this.author = identity.author;
@@ -55,8 +60,8 @@ export class Reviser {
       for (const el of wDescendants(doc, name)) max = Math.max(max, Number(getW(el, "id")) || 0);
     }
     this.nextId = max + 1;
-    this.localDate = w3c(new Date(now.getTime() + identity.utcOffsetMinutes * 60_000));
-    this.utcDate = w3c(now);
+    this.utcOffsetMinutes = identity.utcOffsetMinutes;
+    this.now = now;
     this.useDateUtc = ensureW16du(doc);
   }
 
@@ -67,6 +72,8 @@ export class Reviser {
   /** Run `fn` and return the w:id values of the insertions/deletions it created (links UI items to revisions). */
   capture(fn: () => void): string[] {
     const outer = this.captured;
+    const outerGroup = this.group;
+    if (!outer) this.group = ++this.groups; // one edit = one moment in the review session
     this.captured = [];
     try {
       fn();
@@ -74,16 +81,69 @@ export class Reviser {
     } finally {
       const ids = this.captured;
       this.captured = outer ? [...outer, ...ids] : null;
+      this.group = outerGroup;
     }
+  }
+
+  private setDate(el: Element, at: Date): void {
+    setW(el, "date", w3c(new Date(at.getTime() + this.utcOffsetMinutes * 60_000)));
+    if (this.useDateUtc) el.setAttributeNS(W16DU_NS, "w16du:dateUtc", w3c(at));
   }
 
   private stamp(el: Element): Element {
     if (this.captured && (el.localName === "ins" || el.localName === "del")) this.captured.push(String(this.nextId));
     setW(el, "id", String(this.nextId++));
     setW(el, "author", this.author);
-    setW(el, "date", this.localDate);
-    if (this.useDateUtc) el.setAttributeNS(W16DU_NS, "w16du:dateUtc", this.utcDate);
+    this.setDate(el, this.now);
+    this.groupOf.set(el, this.group);
     return el;
+  }
+
+  /**
+   * Give the revisions the times of a real review session that ends now, as Karina's own Word reviews have:
+   * the formatting pass first, then each edit in reading order, the gaps growing with the text read in between
+   * and the text typed, plus a little time to think. Changes made in the same minute share Word's minute stamp.
+   */
+  spreadTimes(random: () => number = Math.random): void {
+    if (!this.groupOf.size) return;
+    // how far into the text each revision sits, in reading order
+    const at = new Map<number, number>();
+    const typed = new Map<number, number>();
+    let read = 0;
+    const walk = (node: Element) => {
+      for (let c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType !== 1) continue;
+        const el = c as Element;
+        const g = this.groupOf.get(el);
+        if (g !== undefined) {
+          if (!at.has(g)) at.set(g, g === 0 ? -1 : read);
+          if (el.localName === "ins") typed.set(g, (typed.get(g) ?? 0) + (el.textContent?.length ?? 0));
+        }
+        if (isW(el, "t")) read += el.textContent?.length ?? 0;
+        walk(el);
+      }
+    };
+    walk(this.doc.documentElement!);
+    for (const g of new Set(this.groupOf.values())) if (!at.has(g)) at.set(g, read); // outside the body (never expected)
+
+    const order = [...at.keys()].sort((a, b) => at.get(a)! - at.get(b)! || a - b);
+    let pos = 0;
+    const gaps = order.map((g) => {
+      if (g === 0) return 1 + random() * 2; // select all, set the font and spacing
+      const reading = Math.max(0, at.get(g)! - pos) / READ_CHARS_PER_MINUTE;
+      pos = Math.max(pos, at.get(g)!);
+      return reading + 0.3 + random() * 1.2 + (typed.get(g) ?? 0) / TYPE_CHARS_PER_MINUTE;
+    });
+    const total = gaps.reduce((a, b) => a + b, 0);
+    const scale = total > MAX_SESSION_MINUTES ? MAX_SESSION_MINUTES / total : 1;
+    const start = this.now.getTime() - total * scale * 60_000;
+    const when = new Map<number, Date>();
+    let elapsed = 0;
+    order.forEach((g, i) => {
+      elapsed += gaps[i] * scale;
+      when.set(g, new Date(Math.min(this.now.getTime(), start + elapsed * 60_000)));
+    });
+    for (const [el, g] of this.groupOf) this.setDate(el, when.get(g)!);
   }
 
   private revision(name: "ins" | "del" | "rPrChange" | "pPrChange"): Element {
@@ -353,15 +413,4 @@ export class Reviser {
 
 function ensureFirstChildOrdered(pPr: Element, name: "rPr"): Element {
   return wChild(pPr, name) ?? putOrdered(pPr, wEl(pPr.ownerDocument!, name), PPR_ORDER);
-}
-
-/** Declare the w16du namespace (Word 2023+ UTC revision dates) on the document root if possible. */
-function ensureW16du(doc: Document): boolean {
-  const root = doc.documentElement!;
-  if (root.getAttribute("xmlns:w16du")) return true;
-  const ignorable = root.getAttributeNS(MC_NS, "Ignorable");
-  if (!root.getAttribute("xmlns:mc")) return false;
-  root.setAttributeNS(XMLNS_NS, "xmlns:w16du", W16DU_NS);
-  root.setAttributeNS(MC_NS, "mc:Ignorable", ignorable ? `${ignorable} w16du` : "w16du");
-  return true;
 }

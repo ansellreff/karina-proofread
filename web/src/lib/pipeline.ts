@@ -37,6 +37,8 @@ export interface ProofreadOptions {
   docType?: DocType;
   identity?: Identity;
   now?: Date;
+  /** Randomness for the review-session times (tests pass a fixed one). */
+  random?: () => number;
   /** Include Harper (offline grammar checker) suggestions, limited to the kinds set on the Review rules page. Default true. */
   grammar?: boolean;
   /** Karina's review rules (stores.config.loadRules()). Default, for the command-line scripts: web/prompts/karina-rules.json. */
@@ -270,6 +272,8 @@ export async function proofreadDocx(input: Uint8Array | ArrayBuffer, opts: Proof
     });
   }
 
+  // 5. times: a review session ending now, not every change in the same minute
+  reviser.spreadTimes(opts.random);
   await finalizeMetadata(pkg, identity, now);
   return {
     output: await pkg.save(),
