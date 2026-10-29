@@ -1020,3 +1020,43 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - Hovering shows the exact time; the column was widened to fit.
   - The server writes dates in UTC and the browser in her own time zone, so they never disagree.
   - Checked on the local app, on desktop and phone, with no errors.
+
+## V.6.2: hidden characters, tidy student names, times in the Documents list (2026-10-29)
+**Requests:**
+1. Karina asked about a "watermarks-remover" plugin. After weighing it, she decided not to use it, but asked for its safe part inside our own rules.
+2. Student names should be written consistently ("Alex Suti", never "ALEX SUTI" or "alex suti").
+3. Latest first should go by the time too, with the time shown ("Thu, 2026/10/29 21:00").
+
+- **Why not the plugin:**
+  - it needs a separate service running in Docker;
+  - its main feature rewrites text so that AI detectors can't recognise it, which would mislead admissions committees;
+  - student documents would pass through another tool.
+- **What was built instead: a new text fix, "Remove hidden characters"** (`lib/rules/hidden.ts`, Review rules → Text fixes, on by default). It is part of the rules engine, not the AI, because the AI can't reliably see invisible characters, and the engine is exact and free.
+  - **What it fixes:**
+    - invisible characters left by copy-paste (zero-width spaces, word joiners, byte-order marks, soft hyphens, direction marks and controls, hidden "tag" characters) are removed; a run of them counts as one fix;
+    - unusual space characters become a normal space;
+    - Cyrillic or Greek look-alike letters hidden inside an English word become the normal letter.
+  - **What it leaves alone:**
+    - the ordinary non-breaking space and the Chinese full-width space;
+    - joiners that are part of an emoji or of a script that needs them;
+    - real Russian or Greek words.
+  - **How it appears:** each fix is a normal tracked change with a private note saying what the character was. Nothing is reworded.
+  - **The AI's suggestions** (proofread and re-check) are cleaned the same way before they reach the document.
+  - **On the 43 training documents,** it fired in 1 document (4 zero-width spaces), and nowhere else.
+- **Student names** (`lib/student-name.ts`), used whenever a document is added and whenever one is read, so existing documents and the Proofread record show the tidy form too:
+  - each word starts with a capital and the rest is small, including hyphens and apostrophes (Anne-Marie, O'Neil); a word typed with caps lock on ("aLEX") is tidied too;
+  - names joined in a file name are split (AlexSuti → Alex Suti);
+  - names written with inner capitals on purpose keep them (McDonald, DeAndre);
+  - small connecting words stay small (van, de, bin, binti…), and Chinese names are unchanged;
+  - **why the detector seemed inconsistent:** when the document itself doesn't give the name, it comes from the file name, which is often shorter or joined. Now a name guessed from the file name uses the fuller name of the same student already in the app, if exactly one student matches.
+  - Names Karina types when renaming get the same tidy form; capitals she writes on purpose (McDonald) are kept.
+- **Documents list time:**
+  - the Updated column shows "Thu, 2026/10/29 21:00" (24-hour, her own time zone);
+  - Latest first sorts by the exact moment, both on the server and in the browser.
+- **A roomier Documents list** (her request: with the time added, the list looked stuffed):
+  - the page is wider (`max-w-6xl`, other pages unchanged);
+  - the date and the time sit on two lines, so the Updated column is narrower and the Student and Type columns get the room: file names and types fit on one line on a laptop;
+  - the column layout starts from 768 px wide; narrower screens (phones, tablets upright) show each document as a card: name and type on top, file name and date under them, then status and score;
+  - the score chip ("70 → 71") never breaks onto two lines;
+  - checked with screenshots at 1440, 1100, 800 and 390 px wide, light and dark, with no sideways scrolling.
+- **Verified:** new unit tests for the hidden-characters rule and for names; all unit tests, lint and the type check pass.

@@ -35,6 +35,40 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.2",
+    date: "2026-10-29",
+    kind: "minor",
+    title: "Hidden characters, tidy student names, a roomier Documents list",
+    summary: "Invisible copy-paste characters are cleaned out, student names are written the same way everywhere, and the Documents list shows the time and has more room.",
+    points: [
+      {
+        kind: "new",
+        text: "Remove hidden characters: invisible characters left by copy-paste (zero-width spaces, stray direction marks and the like), odd space characters and look-alike letters from another alphabet are fixed as normal suggestions, each with a note saying what it was. Nothing is reworded, and the AI’s suggestions are kept free of them too. On by default; you can switch it off.",
+        href: "/rules",
+        where: "Review rules → Text fixes",
+      },
+      {
+        kind: "improved",
+        text: "Student names are written the same way everywhere: Alex Suti, not ALEX SUTI or alex suti. Names joined in a file name are split (AlexSuti → Alex Suti), and a name taken from a file name uses the fuller name of the same student already in the app. Names like McDonald keep their capitals.",
+        href: "/",
+        where: "Documents",
+      },
+      {
+        kind: "improved",
+        text: "The Documents list shows the time as well as the date (Thu, 2026/10/29 with 21:00 under it), and Latest first sorts by the exact time.",
+        href: "/",
+        where: "Documents",
+      },
+      {
+        kind: "improved",
+        text: "A roomier Documents list: the page is wider, file names and document types fit on one line, the score never breaks, and on phones and tablets each document is a tidy card with the date under its type.",
+        href: "/",
+        where: "Documents",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.1",
     date: "2026-10-27",
     kind: "minor",
@@ -54,7 +88,7 @@ export const RELEASES: Release[] = [
         where: "Review rules → Your rules",
       },
     ],
-    commits: [],
+    commits: ["d1cf0ec"],
   },
   {
     version: "6.0",

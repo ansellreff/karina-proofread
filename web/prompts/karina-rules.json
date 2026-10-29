@@ -19,6 +19,9 @@
     "reminderTitle": "ALWAYS REMEMBER BASIC WRITING FORMAT"
   },
   "builtIn": {
+    "hiddenCharacters": {
+      "enabled": true
+    },
     "degreeCase": {
       "enabled": true
     },

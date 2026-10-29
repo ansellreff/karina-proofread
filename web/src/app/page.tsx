@@ -16,7 +16,7 @@ export default async function Inbox(props: PageProps<"/">) {
   const status = params.status === "new" || params.status === "ready" || params.status === "done" ? params.status : "all";
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-6">
         <h1 className="text-[1.75rem] leading-tight font-semibold">Documents</h1>
         <p className="mt-1 text-muted-foreground">

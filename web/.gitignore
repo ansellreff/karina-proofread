@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# browser-test screenshots (they show student documents)
+/e2e-shots/
 
 # next.js
 /.next/

@@ -784,7 +784,7 @@ try {
 // 7c. documents page: search, delete with Undo, Recently deleted -> Restore (only this test's own document)
 {
   // give this test's document a unique name first, so search and delete can only ever touch it
-  const name = `E2E Test ${Date.now().toString(36)}`;
+  const name = `E2e Test X${Date.now().toString(36)}`; // already in the app's tidy name form (lib/student-name.ts)
   await fetch(`${base}/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentName: name }) });
   const dp = await newPage({ width: 1280, height: 900 });
   await dp.goto(`${base}/`);

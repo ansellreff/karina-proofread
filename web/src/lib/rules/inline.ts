@@ -1,5 +1,6 @@
 import { fill, type BuiltInRules } from "./config";
 import { customInlineEdits } from "./custom";
+import { hiddenCharacters } from "./hidden";
 import { atSentenceStart, lowerField } from "./text";
 import { NARRATIVE, rulesOf, type RuleContext, type TextEdit } from "./types";
 
@@ -197,6 +198,7 @@ const resumeLanguage: Rule = (ctx) => {
 
 /** Built-in inline rules in priority order (earlier wins an overlap), each switchable on the Review rules page. */
 const BUILT_IN: [keyof BuiltInRules | "custom", Rule][] = [
+  ["hiddenCharacters", hiddenCharacters], // first: invisible characters must not split the words other rules look for
   ["degreeCase", degreeCase],
   ["spaceBeforeColon", spaceBeforeColon],
   ["doubleSpace", doubleSpace],

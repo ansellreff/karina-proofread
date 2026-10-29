@@ -2,6 +2,11 @@ import type { BuiltInRules } from "@/lib/rules/config";
 
 /** Plain-English names for the built-in checks on the Review rules page. */
 export const TEXT_FIXES: { id: keyof BuiltInRules; label: string; example: string }[] = [
+  {
+    id: "hiddenCharacters",
+    label: "Remove hidden characters",
+    example: "Invisible characters left by copy-paste (zero-width spaces, hidden marks) are removed, odd spaces become normal spaces, and a look-alike letter from another alphabet inside an English word (a Cyrillic “а”) becomes the normal letter. Each one is a tracked change with a note in the panel. Nothing is reworded; the AI’s suggestions are kept free of them too.",
+  },
   { id: "degreeCase", label: "Degree and field names in lower case", example: "a Bachelor’s Degree in Chemistry → a bachelor's degree in chemistry (unless it starts a sentence after a full stop)" },
   { id: "spaceBeforeColon", label: "No space before a colon", example: "Thesis : → Thesis:" },
   { id: "doubleSpace", label: "No double spaces mid-sentence", example: "my  research → my research" },

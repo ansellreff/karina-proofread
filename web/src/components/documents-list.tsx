@@ -37,22 +37,27 @@ const TABS: { id: Tab; label: string }[] = [
 const inTab = (j: Job, t: Tab) => t === "all" || j.status === t || (t === "new" && j.status === "proofreading");
 
 /**
- * Last updated, as Karina reads dates: "Tue, 2026/10/27". In UTC while rendering on the server (online it runs in
- * UTC), in her own time zone once in the browser, so the two never disagree.
+ * Last updated, as Karina reads dates: "Thu, 2026/10/29" and "21:00" (24-hour), shown on one line on phones and
+ * as date over time on wider screens. In UTC while rendering on the server (online it runs in UTC), in her own
+ * time zone once in the browser, so the two never disagree.
  */
 export function when(iso: string, local = true) {
   const d = new Date(iso);
   const timeZone = local ? undefined : "UTC";
   const weekday = d.toLocaleDateString("en-GB", { weekday: "short", timeZone });
   const [y, m, day] = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(d).split("-");
-  return `${weekday}, ${y}/${m}/${day}`;
+  const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(d);
+  return { date: `${weekday}, ${y}/${m}/${day}`, time };
 }
+/** Newest first by the exact moment (date and time), whatever form the stored time stamp has. */
+const byUpdated = (a: Job, b: Job) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0);
 /** The exact time, on hover. */
 const whenExactly = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const scoreOf = (j: Job) => j.score?.total ?? j.proofread?.score?.original.total ?? null;
 const tone = (n: number) => (n >= 85 ? "text-ins" : n >= 70 ? "text-foreground" : "text-del");
-const COLS = "sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_12.5rem_7.25rem_2.25rem]";
+/** Columns from tablet-landscape width up; narrower screens stack each document as a small card. */
+const COLS = "md:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_11.5rem_7rem_2.25rem]";
 
 /** "deleted forever in 6 days" / "tomorrow" / "today". */
 function foreverIn(expiresAt: string) {
@@ -95,6 +100,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
     const list = visible.filter((j) => inTab(j, tab) && (!q || [j.studentName ?? "", j.fileName, j.docType].some((s) => s.toLowerCase().includes(q))));
     if (sort === "name") list.sort((a, b) => (a.studentName ?? a.fileName).localeCompare(b.studentName ?? b.fileName));
     else if (sort === "score") list.sort((a, b) => (scoreOf(a) ?? 101) - (scoreOf(b) ?? 101)); // lowest score first: needs most work
+    else list.sort(byUpdated);
     return list;
   }, [visible, tab, query, sort]);
 
@@ -204,7 +210,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
       </div>
 
       <section className="mt-4 overflow-hidden rounded-lg border bg-card" aria-label="Documents">
-        <div className={cn("hidden gap-x-4 border-b py-2 pr-2 pl-5 text-xs text-muted-foreground sm:grid", COLS)}>
+        <div className={cn("hidden gap-x-4 border-b py-2 pr-2 pl-5 text-xs text-muted-foreground md:grid", COLS)}>
           <span>Student</span>
           <span>Type</span>
           <span>Status and score</span>
@@ -220,11 +226,13 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
             {shown.map((job) => {
               const changes = job.proofread?.changeCount ?? job.proofread?.changes.length;
               const score = scoreOf(job);
+              const updated = when(job.updatedAt, mounted);
+              const exactly = mounted ? whenExactly(job.updatedAt) : undefined;
               return (
-                <li key={job.id} className={cn("group grid grid-cols-[1fr_auto] items-center gap-x-2 pr-2 pl-4 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 sm:gap-x-4 sm:pl-5", COLS)}>
+                <li key={job.id} className={cn("group grid grid-cols-[1fr_auto] items-center gap-x-2 pr-2 pl-4 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 md:gap-x-4 md:pl-5", COLS)}>
                   <Link
                     href={`/jobs/${job.id}`}
-                    className="col-span-1 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 rounded-sm py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:col-span-4 sm:grid-cols-subgrid"
+                    className="col-span-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-sm py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:col-span-4 md:grid-cols-subgrid md:gap-y-1"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-serif text-[1.02rem] font-semibold">{job.studentName ?? "Unnamed student"}</p>
@@ -232,28 +240,30 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
                         {job.sourceFile ? `${job.sourceFile.name} (PDF)` : job.fileName}
                       </p>
                     </div>
-                    <div className="col-start-2 row-start-1 justify-self-end text-right sm:col-start-auto sm:row-start-auto sm:justify-self-start sm:text-left">
-                      <p className="text-sm">{job.docType === "Unknown" ? "Document" : job.docType}</p>
+                    <div className="col-start-2 row-start-1 justify-self-end text-right md:col-start-auto md:row-start-auto md:justify-self-stretch md:text-left">
+                      <p className="text-sm text-pretty">{job.docType === "Unknown" ? "Document" : job.docType}</p>
                       {changes !== undefined && (
-                        <p className="hidden text-xs text-muted-foreground sm:block">
+                        <p className="hidden text-xs text-muted-foreground md:block">
                           {changes} changes{job.proofread?.ai ? ", with AI" : ""}
                         </p>
                       )}
+                      {/* phones: when, under the type (the status line keeps just status and score) */}
+                      <p className="text-xs whitespace-nowrap text-muted-foreground tabular-nums md:hidden" title={exactly}>
+                        {updated.date} {updated.time}
+                      </p>
                     </div>
-                    <div className="col-span-2 flex items-center gap-2.5 sm:col-span-1">
+                    <div className="col-span-2 flex items-center gap-2.5 md:col-span-1">
                       <StatusChip status={job.status} />
                       {score !== null && (
-                        <span className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums" title="Score out of 100: original → latest">
+                        <span className="inline-flex shrink-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="Score out of 100: original → latest">
                           {job.proofread?.score && job.proofread.score.original.total !== score && <span>{job.proofread.score.original.total} →</span>}
                           <span className={cn("font-serif text-sm font-semibold", tone(score))}>{score}</span>
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground sm:hidden" title={mounted ? whenExactly(job.updatedAt) : undefined}>
-                        {when(job.updatedAt, mounted)}
-                      </span>
                     </div>
-                    <span className="hidden text-right text-sm whitespace-nowrap text-muted-foreground tabular-nums sm:block" title={mounted ? whenExactly(job.updatedAt) : undefined}>
-                      {when(job.updatedAt, mounted)}
+                    <span className="hidden text-right whitespace-nowrap tabular-nums md:block" title={exactly}>
+                      <span className="block text-sm text-muted-foreground">{updated.date}</span>
+                      <span className="block text-xs text-muted-foreground">{updated.time}</span>
                     </span>
                   </Link>
                   <DropdownMenu>

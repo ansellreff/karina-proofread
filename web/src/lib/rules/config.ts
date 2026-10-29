@@ -42,6 +42,8 @@ export interface LengthLimit {
 }
 
 export interface BuiltInRules {
+  /** Invisible characters, odd spaces and look-alike letters from copy-paste (lib/rules/hidden.ts). */
+  hiddenCharacters: Toggle;
   degreeCase: Toggle;
   spaceBeforeColon: Toggle;
   doubleSpace: Toggle;
@@ -161,6 +163,7 @@ export const DEFAULT_RULES: RuleConfig = {
     reminderTitle: "ALWAYS REMEMBER BASIC WRITING FORMAT",
   },
   builtIn: {
+    hiddenCharacters: { enabled: true },
     degreeCase: { enabled: true },
     spaceBeforeColon: { enabled: true },
     doubleSpace: { enabled: true },

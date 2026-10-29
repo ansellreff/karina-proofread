@@ -3,6 +3,7 @@
  * in the app leave the record), then what counts. Server only.
  */
 import type { Stores } from "../storage/local";
+import { formatStudentName } from "../student-name";
 import { summarize, type RecordEntry } from "./store";
 
 /** Where an entry's document is: in the app, in Recently deleted (unfinished: not counted unless restored), or gone. */
@@ -15,7 +16,11 @@ export async function recordState(s: Stores, now = new Date()) {
   const inTrash = new Set(trash.map((t) => t.job.id));
   await s.record.prune(active, inTrash);
   const entries = await s.record.list();
-  const rows: RecordRow[] = entries.map((e) => ({ ...e, doc: active.has(e.id) ? "active" : inTrash.has(e.id) ? "trash" : "deleted" }));
+  const rows: RecordRow[] = entries.map((e) => ({
+    ...e,
+    firstName: formatStudentName(e.firstName), // entries counted before names were tidied read the same way
+    doc: active.has(e.id) ? "active" : inTrash.has(e.id) ? "trash" : "deleted",
+  }));
   return { rows, summary: summarize(entries, now, active) };
 }
 

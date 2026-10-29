@@ -6,6 +6,7 @@ import { DEFAULT_FILE_NAME, normalizeFormat, OLD_DEFAULT_FILE_NAME } from "../na
 import { pdfToDocx } from "../pdf/pdf-to-docx";
 import { buildContext, detectName } from "../rules/detect";
 import { readJson, readText, writeJson, type AppFiles } from "../storage/files";
+import { formatStudentName, matchKnownName } from "../student-name";
 import { DEFAULT_SETTINGS, TRASH_DAYS, type Job, type JobStore, type Settings, type TrashEntry, type UsageEntry, type Version } from "./types";
 
 /** A proofread cut off before it finished (a server function can be stopped) is treated as not started. */
@@ -39,6 +40,7 @@ export class FileJobStore implements JobStore {
     if (job.status === "proofreading" && Date.now() - Date.parse(job.updatedAt) > STALLED_MS) job.status = job.versions.length > 1 ? "ready" : "new";
     // an older guess took the submission date for the name ("Study Plan_Ruddy_20261005" -> "20261005"); guess again
     if (job.studentName && NOT_A_NAME.test(job.studentName.trim())) job.studentName = guessNameFromFile(job.fileName);
+    job.studentName = formatStudentName(job.studentName); // "ALEX SUTI" / "alex suti" -> "Alex Suti", everywhere
     return job;
   }
 
@@ -72,7 +74,8 @@ export class FileJobStore implements JobStore {
       index = await this.rebuildIndex();
       if (Object.keys(index).length) await writeJson(this.files, "jobs/index.json", index);
     }
-    return Object.values(index).map((j) => this.normalize(j)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    // newest first by the exact moment: comparing the text breaks when two time stamps are written differently
+    return Object.values(index).map((j) => this.normalize(j)).sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0));
   }
 
   async get(id: string): Promise<Job | null> {
@@ -98,7 +101,7 @@ export class FileJobStore implements JobStore {
       id,
       fileName,
       docType: ctx.docType,
-      studentName: detectName(ctx) ?? guessNameFromFile(fileName),
+      studentName: await this.nameFor(ctx, fileName),
       status: "new",
       source,
       createdAt: now,
@@ -111,6 +114,20 @@ export class FileJobStore implements JobStore {
     await this.files.write(`${this.dir(id)}/v0.docx`, data);
     await this.save(job);
     return job;
+  }
+
+  /**
+   * The student's name for a new document, written as "Alex Suti": from the document itself when it says it
+   * ("My name is …", "Name: …"), else from the file name, matched to a student already in the app so the same
+   * student gets the same name on every document.
+   */
+  private async nameFor(ctx: ReturnType<typeof buildContext>, fileName: string): Promise<string | null> {
+    const inDocument = formatStudentName(detectName(ctx));
+    if (inDocument) return inDocument;
+    const guess = formatStudentName(guessNameFromFile(fileName));
+    if (!guess) return null;
+    const known = (await this.list().catch(() => [] as Job[])).map((j) => j.studentName);
+    return matchKnownName(guess, known);
   }
 
   async save(job: Job): Promise<void> {

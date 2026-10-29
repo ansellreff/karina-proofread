@@ -1,4 +1,5 @@
 import { headerZone } from "../rules/detect";
+import { stripHidden } from "../rules/hidden";
 import type { ParagraphInsert, RuleContext, TextEdit } from "../rules/types";
 import type { Review } from "./schema";
 
@@ -114,7 +115,15 @@ export function wordHunks(find: string, replace: string): { start: number; end: 
   return merged;
 }
 
-export function mapReview(review: Review, ctx: RuleContext): MappedReview {
+export function mapReview(raw: Review, ctx: RuleContext): MappedReview {
+  // the AI's own text never brings hidden characters into the document (the anchors it quotes stay as they are)
+  const review: Review = {
+    ...raw,
+    replacements: raw.replacements.map((r) => ({ ...r, replace: stripHidden(r.replace) })),
+    insertions: raw.insertions.map((i) => ({ ...i, text: stripHidden(i.text) })),
+    suggestion_paragraphs: raw.suggestion_paragraphs.map((s) => ({ ...s, text: stripHidden(s.text) })),
+    end_note_items: raw.end_note_items.map(stripHidden),
+  };
   const byIndex = new Map(ctx.paras.map((p) => [p.index, p]));
   const header = new Set(headerZone(ctx).map((p) => p.index));
   const out: MappedReview = { edits: [], deletions: [], inserts: [], endNoteItems: [], dropped: [], reasons: new Map() };

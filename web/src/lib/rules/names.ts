@@ -2,6 +2,7 @@ import type { BuiltInRules, RuleConfig } from "./config";
 import type { DocType } from "./types";
 
 const NAMES: Record<string, string> = {
+  "hidden-characters": "Hidden characters",
   "degree-case": "Degree name in lower case", "space-before-colon": "Space before a colon", "double-space": "Double space",
   "hyphen-compound": "Hyphenated compound", "indonesian-university": "Official university name", "university-acronym": "University acronym",
   "indonesian-acronym": "Indonesian acronym", "conclusion-heading": "Conclusion heading", "long-paragraph": "Long paragraph",
@@ -11,6 +12,7 @@ const NAMES: Record<string, string> = {
 
 /** Built-in check behind each rule id the engine writes into its change list. */
 export const BUILT_IN_OF: Record<string, keyof BuiltInRules> = {
+  "hidden-characters": "hiddenCharacters",
   "degree-case": "degreeCase", "space-before-colon": "spaceBeforeColon", "double-space": "doubleSpace", "hyphen-compound": "hyphenCompounds",
   "indonesian-university": "indonesianUniversity", "indonesian-acronym": "indonesianAcronyms", "university-acronym": "universityAcronyms",
   "conclusion-heading": "conclusionHeading", "long-paragraph": "longParagraph", "resume-year": "resumeYear", "resume-language": "resumeLanguage",

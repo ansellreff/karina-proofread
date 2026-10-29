@@ -15,6 +15,7 @@ import { localStores } from "./storage/local";
 import { buildContext, detectName } from "./rules/detect";
 import { planFormatting, type FormatPlan } from "./rules/format";
 import { grammarEdits } from "./rules/grammar";
+import { stripHidden } from "./rules/hidden";
 import { resolveOverlaps, runRules } from "./rules/index";
 import type { DocType, ParagraphInsert, RuleContext, RuleOutput, TextEdit } from "./rules/types";
 
@@ -171,12 +172,14 @@ export async function recheckPassage(passage: string, docType: DocType, ai: AiOp
   const res = await client.review({ system: await systemOf(ai), user, model, effort: ai.effort ?? "high" });
   const edits: PassageEdit[] = [];
   for (const r of res.review.replacements) {
-    if (r.find && r.find !== r.replace) edits.push({ find: r.find, replace: r.replace, kind: "fix", reason: r.reason, beyondStyle: r.beyond_style });
+    const replace = stripHidden(r.replace); // never write hidden characters into the document
+    if (r.find && r.find !== replace) edits.push({ find: r.find, replace, kind: "fix", reason: r.reason, beyondStyle: r.beyond_style });
   }
   for (const ins of res.review.insertions) {
     const p = paras[ins.paragraph] ?? "";
     const anchor = ins.after || p.split(/\s+/).slice(-4).join(" ");
-    if (anchor && ins.text) edits.push({ find: anchor, replace: anchor + ins.text, kind: ins.kind, reason: ins.reason, beyondStyle: ins.beyond_style });
+    const text = stripHidden(ins.text);
+    if (anchor && text) edits.push({ find: anchor, replace: anchor + text, kind: ins.kind, reason: ins.reason, beyondStyle: ins.beyond_style });
   }
   return { edits, costUsd: costOf(res.usage, model), model: res.model, usage: res.usage };
 }
