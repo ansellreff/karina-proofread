@@ -1088,3 +1088,16 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
   - **Example** (a CV with 11 changes): from 01:23 to 01:45, with 13 different minute stamps.
 - **Verified:** new unit tests (dates both ways; the session order and gaps). In the app: proofread → balloons show the file's times in a Taiwan-time browser → typed edit saved as 01:45 with its UTC copy → download is in Word's form.
 - **Verified:** new unit tests for the hidden-characters rule and for names; all unit tests, lint and the type check pass.
+
+## V.6.4: Capital letters for official names (2026-11-04)
+**Request:** Karina noticed official names (people, brands, universities…) sometimes stay in lower case after the AI proofread, and asked for an AI rule that capitalises them.
+
+- **What existed:** nothing for the AI. The grammar checker only capitalises dictionary proper nouns (english → English, taiwan → Taiwan); names of people, brands and universities were left to the AI's judgement.
+- **Likely reason they were missed:** the AI keeps a good-English document to at most 6 fixes, so a lower-case name lost out to other fixes.
+- **The rule:** "Capital letters for official names", for the AI, on every document type (Review rules → Your rules, editable like her own rules). It:
+  - covers people's names, brands and companies, universities and schools, organisations and government offices, cities, countries, languages and nationalities;
+  - says these fixes don't count toward the fix budget;
+  - keeps small words in names lower case (University of Indonesia) and acronyms and brands as officially written (NTU, iPhone);
+  - keeps her own rule that degree and field names stay lower case (bachelor's degree in chemistry).
+- **Reaching rules she has already saved:** before this, a saved rules file replaced the built-in list completely, so a new built-in rule never appeared online. Now each file remembers which built-in rules it has been offered (`defaultsSeen`): a new one is added once, and a deleted one stays deleted. Files saved before this count the first six built-in rules as already offered.
+- **Verified:** unit tests (the rule is in the defaults and in the rules file; it is added once to older saved rules; her own rules and switches are kept; deleting it sticks). It wasn't tried on a real AI proofread, to avoid using AI credit.

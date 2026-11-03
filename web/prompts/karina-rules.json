@@ -228,7 +228,30 @@
       "label": "Change contraction words",
       "action": "ai",
       "text": "Add a suggestion to change contractions to their full forms.\nWhile writing a formal document, it is preferred to use a full form word instead of shorten/contracted form.\nFor example, instead of I'm, it should be I am; he's should be he is; didn't should be did not; can't should be cannot, etc."
+    },
+    {
+      "id": "default-7",
+      "enabled": true,
+      "docTypes": [],
+      "find": "",
+      "match": "words",
+      "caseSensitive": false,
+      "occurrences": "first",
+      "condition": "always",
+      "words": 0,
+      "label": "Capital letters for official names",
+      "action": "ai",
+      "text": "Make sure every official name starts with a capital letter: people's names, brand and company names, universities and schools, organisations and government offices, cities, countries, languages and nationalities.\nFor example: universitas gadjah mada → Universitas Gadjah Mada, national taiwan university → National Taiwan University, samsung → Samsung, jakarta → Jakarta, english → English.\nFix every one you find, even in a document with good English; these fixes don't count toward the replacement budget.\nSmall words inside a name stay lower case (University of Indonesia), and acronyms and brands stay as they are officially written (NTU, iPhone).\nDegree and field names stay lower case (bachelor's degree in chemistry); only official program names keep their capitals."
     }
+  ],
+  "defaultsSeen": [
+    "default-1",
+    "default-2",
+    "default-3",
+    "default-4",
+    "default-5",
+    "default-6",
+    "default-7"
   ],
   "lists": {
     "indonesianUniversities": [

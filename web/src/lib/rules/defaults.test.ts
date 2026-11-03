@@ -15,7 +15,35 @@ describe("default rules", () => {
       expect(r?.text).toMatch(/can't should be cannot/);
       expect(validateRules(rules)).toEqual([]);
     }
-    // six rules come with the app: the five notes and this AI rule
-    expect(DEFAULT_RULES.custom).toHaveLength(6);
+    // seven rules come with the app: the five notes and two AI rules
+    expect(DEFAULT_RULES.custom).toHaveLength(7);
+  });
+
+  it("include “Capital letters for official names” for the AI, on every document type, in the defaults and in the rules file", () => {
+    for (const rules of [DEFAULT_RULES, bundled]) {
+      const r = rules.custom.find((c) => c.label === "Capital letters for official names");
+      expect(r).toMatchObject({ id: "default-7", enabled: true, action: "ai", docTypes: [] });
+      expect(r?.text).toMatch(/National Taiwan University/);
+      expect(r?.text).toMatch(/bachelor's degree in chemistry/);
+      expect(validateRules(rules)).toEqual([]);
+    }
+  });
+
+  it("add a new rule that comes with the app to rules saved before it, once (deleting it afterwards sticks)", () => {
+    // a file saved before defaultsSeen existed: the six defaults (one switched off) and one of her own rules
+    const own = { ...DEFAULT_RULES.custom[0], id: "r-mine", label: "Mine" };
+    const old = { custom: [...DEFAULT_RULES.custom.slice(0, 6).map((r, i) => ({ ...r, enabled: i !== 2 })), own] };
+    const loaded = withDefaults(old as Partial<RuleConfig>);
+    expect(loaded.custom.map((r) => r.id)).toEqual(["default-1", "default-2", "default-3", "default-4", "default-5", "default-6", "r-mine", "default-7"]);
+    expect(loaded.custom[2].enabled).toBe(false);
+    expect(loaded.defaultsSeen).toContain("default-7");
+    // loading what was saved again adds nothing more
+    expect(withDefaults(loaded).custom).toHaveLength(8);
+    // she deletes it and saves: it doesn't come back
+    const deleted = { ...loaded, custom: loaded.custom.filter((r) => r.id !== "default-7") };
+    expect(withDefaults(deleted).custom.map((r) => r.id)).not.toContain("default-7");
+    // a default she deleted before this update doesn't come back either
+    const noFour = withDefaults({ custom: old.custom.filter((r) => r.id !== "default-4") } as Partial<RuleConfig>);
+    expect(noFour.custom.map((r) => r.id)).not.toContain("default-4");
   });
 });

@@ -109,6 +109,8 @@ export interface RuleConfig {
   builtIn: BuiltInRules;
   grammar: Record<string, GrammarUse>;
   custom: CustomRule[];
+  /** Ids of the rules that come with the app that this file has already been offered (a deleted one stays deleted). */
+  defaultsSeen: string[];
   lists: {
     indonesianUniversities: UniversityName[];
     indonesianAcronyms: Acronym[];
@@ -251,7 +253,13 @@ export const DEFAULT_RULES: RuleConfig = {
       action: "ai",
       text: "Add a suggestion to change contractions to their full forms.\nWhile writing a formal document, it is preferred to use a full form word instead of shorten/contracted form.\nFor example, instead of I'm, it should be I am; he's should be he is; didn't should be did not; can't should be cannot, etc.",
     }),
+    rule({
+      label: "Capital letters for official names",
+      action: "ai",
+      text: "Make sure every official name starts with a capital letter: people's names, brand and company names, universities and schools, organisations and government offices, cities, countries, languages and nationalities.\nFor example: universitas gadjah mada → Universitas Gadjah Mada, national taiwan university → National Taiwan University, samsung → Samsung, jakarta → Jakarta, english → English.\nFix every one you find, even in a document with good English; these fixes don't count toward the replacement budget.\nSmall words inside a name stay lower case (University of Indonesia), and acronyms and brands stay as they are officially written (NTU, iPhone).\nDegree and field names stay lower case (bachelor's degree in chemistry); only official program names keep their capitals.",
+    }),
   ],
+  defaultsSeen: [],
   lists: {
     indonesianUniversities: [
       { names: ["Petra Christian University"], official: "Universitas Kristen Petra" },
@@ -366,9 +374,17 @@ export const DEFAULT_RULES: RuleConfig = {
   },
 };
 
+DEFAULT_RULES.defaultsSeen = DEFAULT_RULES.custom.map((r) => r.id);
+
+/** The rules that came with the app before files remembered `defaultsSeen` (every saved file already had them). */
+const DEFAULTS_BEFORE_SEEN = ["default-1", "default-2", "default-3", "default-4", "default-5", "default-6"];
+
 // ---------------------------------------------------------------------------------------------------------------
 
-/** Fill anything missing from a saved file with the defaults (new built-in rules appear after an update). */
+/**
+ * Fill anything missing from a saved file with the defaults (new built-in rules appear after an update). A rule
+ * that comes with the app is added to saved rules once; deleting it afterwards sticks (`defaultsSeen`).
+ */
 export function withDefaults(saved: Partial<RuleConfig> | null | undefined): RuleConfig {
   const d = DEFAULT_RULES;
   if (!saved) return structuredClone(d);
@@ -376,12 +392,16 @@ export function withDefaults(saved: Partial<RuleConfig> | null | undefined): Rul
   for (const k of Object.keys(d.builtIn) as (keyof BuiltInRules)[]) {
     (builtIn as unknown as Record<string, unknown>)[k] = { ...d.builtIn[k], ...(saved.builtIn?.[k] ?? {}) };
   }
+  const seen = new Set(saved.defaultsSeen ?? DEFAULTS_BEFORE_SEEN);
+  const custom = saved.custom ?? d.custom;
+  const added = d.custom.filter((r) => !seen.has(r.id) && !custom.some((c) => c.id === r.id));
   return structuredClone({
     version: 1,
     format: { ...d.format, ...(saved.format ?? {}) },
     builtIn,
     grammar: { ...d.grammar, ...(saved.grammar ?? {}) },
-    custom: (saved.custom ?? d.custom).map((r) => ({ ...rule({ label: "", action: "note", text: "" }), ...r })),
+    custom: [...custom, ...added].map((r) => ({ ...rule({ label: "", action: "note", text: "" }), ...r })),
+    defaultsSeen: d.defaultsSeen,
     lists: { ...d.lists, ...(saved.lists ?? {}) },
   });
 }

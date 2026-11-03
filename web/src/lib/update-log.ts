@@ -35,6 +35,30 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.4",
+    date: "2026-11-04",
+    kind: "minor",
+    title: "Capital letters for official names",
+    summary: "The AI now makes sure names of people, brands, universities, places and other official names start with a capital letter.",
+    points: [
+      {
+        kind: "new",
+        text: "“Capital letters for official names” is one of the rules that come with the app: the AI capitalises people’s names, brands and companies, universities and schools, organisations, cities, countries and languages (national taiwan university → National Taiwan University, samsung → Samsung), in every type of document. Degree and field names still stay lower case.",
+        href: "/rules",
+        where: "Review rules → Your rules",
+      },
+      {
+        kind: "improved",
+        text: "These name fixes are made even in well-written documents, where the AI otherwise keeps its changes to a few.",
+      },
+      {
+        kind: "improved",
+        text: "A new rule that comes with the app now also appears in the rules you have already saved, once. If you delete it, it stays deleted.",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.3",
     date: "2026-10-30",
     kind: "minor",
@@ -54,7 +78,7 @@ export const RELEASES: Release[] = [
         text: "The bot’s changes no longer all carry the same minute: they follow a review session that ends when the proofread finishes. Formatting comes first, then each change in reading order, the gaps depending on how much text lies between them and how much is typed.",
       },
     ],
-    commits: [],
+    commits: ["f63a298"],
   },
   {
     version: "6.2",
