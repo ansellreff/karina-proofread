@@ -372,6 +372,135 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
 .record-cheer {
   animation: trophy-rise 600ms ease-out both;
 }
+.trophy-cup {
+  animation-delay: var(--delay, 0ms);
+}
+.trophy-locked {
+  opacity: 0.5;
+  filter: none;
+}
+
+/* the spotlight trophy: tilts towards the pointer, a soft shine follows it */
+.trophy-tilt {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 250ms ease-out;
+  transform-style: preserve-3d;
+}
+.trophy-shine-sweep {
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 40%), color-mix(in srgb, var(--trophy-shine) 35%, transparent), transparent 45%);
+  mix-blend-mode: soft-light;
+}
+/* changing trophy: the old one spins away, the new one drops in with a flash */
+.trophy-swap-out {
+  animation: trophy-swap-out 600ms ease-in both;
+}
+.trophy-swap-in {
+  animation: trophy-swap-in 750ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+.trophy-flash {
+  background: radial-gradient(circle, color-mix(in srgb, var(--trophy-shine) 90%, transparent), transparent 65%);
+  animation: trophy-flash 700ms ease-out both;
+}
+.trophy-clink {
+  animation: trophy-clink 650ms ease-in-out;
+}
+.trophy-shake {
+  animation: trophy-shake 400ms ease-in-out;
+}
+.trophy-plaque {
+  animation: trophy-rise 450ms ease-out both;
+}
+.trophy-nav {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+.trophy-nav:hover {
+  color: var(--foreground);
+  background: var(--secondary);
+}
+.trophy-nav:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+}
+@keyframes trophy-swap-out {
+  to {
+    opacity: 0;
+    transform: translateY(28px) scale(0.7) rotateY(100deg);
+  }
+}
+@keyframes trophy-swap-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-36px) scale(0.6) rotateY(-100deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(5px) scale(1.06) rotateY(12deg);
+  }
+}
+@keyframes trophy-flash {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes trophy-clink {
+  20% {
+    transform: rotate(-9deg) scale(1.06);
+  }
+  40% {
+    transform: rotate(7deg) scale(1.04);
+  }
+  60% {
+    transform: rotate(-4deg);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
+}
+@keyframes trophy-shake {
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
+/* the trophy cabinet: glass shelves, each slot standing on a plank */
+.trophy-cabinet {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--spotlight) 70%, var(--card)), var(--card) 85%);
+}
+.cabinet-plank {
+  background: linear-gradient(color-mix(in srgb, var(--trophy-ink) 22%, var(--card)), color-mix(in srgb, var(--trophy-ink) 38%, var(--card)));
+  box-shadow: 0 6px 8px -6px rgb(var(--shadow-color) / 0.45);
+}
+.cabinet-slot {
+  transition: background-color 200ms, transform 250ms;
+}
+.cabinet-slot:hover {
+  background: color-mix(in srgb, var(--metal) 10%, transparent);
+}
+.cabinet-slot.is-selected {
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, color-mix(in srgb, var(--metal) 28%, transparent), transparent 75%);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--metal) 70%, transparent);
+  transform: translateY(-3px);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

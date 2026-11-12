@@ -21,6 +21,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">> & { manual?: boolean };
   if (body.status) {
     if (!STATUSES.includes(body.status)) return Response.json({ error: "Unknown status." }, { status: 400 });
+    // the archive timer starts when it is marked as done, and stops when it is reopened
+    if (body.status === "done" && job.status !== "done") job.doneAt = new Date().toISOString();
+    if (body.status !== "done") delete job.doneAt;
     job.status = body.status;
   }
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;

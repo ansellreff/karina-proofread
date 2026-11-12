@@ -1,19 +1,30 @@
 import { DocumentsList } from "@/components/documents-list";
 import { UploadZone } from "@/components/upload-zone";
 import { stores } from "@/lib/storage/stores";
+import { doneSince } from "@/lib/store/archive";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documents" };
 
+/** The documents, the Recently deleted count, and the moment they were read (Archived is decided against it). */
+async function loadDocuments() {
+  const st = await stores();
+  const store = st.jobs;
+  await store.purgeExpired().catch(() => 0); // Recently deleted keeps documents TRASH_DAYS days
+  const [listed, trashCount, record] = await Promise.all([store.list(), store.trashCount(), st.record.list().catch(() => [])]);
+  // documents finished before the archive timer existed: when the Proofread record saw them finished
+  const finishedAt = new Map(record.map((e) => [e.id, e.finishedAt]));
+  const jobs = listed.map((j) => (j.status === "done" && !j.doneAt ? { ...j, doneAt: doneSince(j, finishedAt.get(j.id)) ?? undefined } : j));
+  return { jobs, trashCount, now: Date.now() };
+}
+
 export default async function Inbox(props: PageProps<"/">) {
   const params = await props.searchParams;
-  const store = (await stores()).jobs;
-  await store.purgeExpired().catch(() => 0); // Recently deleted keeps documents TRASH_DAYS days
-  const [jobs, trashCount] = await Promise.all([store.list(), store.trashCount()]);
+  const { jobs, trashCount, now } = await loadDocuments();
   const waiting = jobs.filter((j) => j.status === "new").length;
   const ready = jobs.filter((j) => j.status === "ready").length;
   const q = typeof params.q === "string" ? params.q : "";
-  const status = params.status === "new" || params.status === "ready" || params.status === "done" ? params.status : "all";
+  const status = (["new", "ready", "done", "archived"] as const).find((s) => s === params.status) ?? "all";
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -28,7 +39,7 @@ export default async function Inbox(props: PageProps<"/">) {
         </p>
       </div>
       <UploadZone />
-      <DocumentsList jobs={jobs} trashCount={trashCount} initialQuery={q} initialTab={status} />
+      <DocumentsList jobs={jobs} trashCount={trashCount} initialQuery={q} initialTab={status} now={now} />
     </main>
   );
 }

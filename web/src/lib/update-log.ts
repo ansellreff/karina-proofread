@@ -35,6 +35,34 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.6",
+    date: "2026-11-12",
+    kind: "minor",
+    title: "Archive and a trophy cabinet",
+    summary: "Finished documents move to Archived two weeks after you mark them as done, and the Proofread record has a trophy cabinet you can play with.",
+    points: [
+      {
+        kind: "new",
+        text: "Archived on the Documents page: 14 days after you mark a document as done, it leaves All and Done and moves to Archived, where you can still open, download or reopen it. Only documents marked as done are archived; new and ongoing reviews never are. Done documents show how many days are left, and a search also points to matching archived documents.",
+        href: "/?status=archived",
+        where: "Documents → Archived",
+      },
+      {
+        kind: "new",
+        text: "Your trophy cabinet: every trophy stands on a shelf, the ones you won shining and the next ones waiting as locked silhouettes. Tap any of them to put it in the spotlight: the trophies swap with an animation, and the plaque tells when you won it and with which document.",
+        href: "/record",
+        where: "Proofread record",
+      },
+      {
+        kind: "improved",
+        text: "The big trophy tilts towards your mouse and bursts into confetti when you tap it. Arrows (or the ← → keys) move through your trophies, and reaching a new level now swaps your old trophy for the new one before the celebration.",
+        href: "/record",
+        where: "Proofread record",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.5",
     date: "2026-11-12",
     kind: "minor",
@@ -56,7 +84,7 @@ export const RELEASES: Release[] = [
         text: "The AI now also reads the page header and footer, and is told privately when a file was made by a program that AI chat tools use to create Word files and was never edited in Word. This is never written into the document.",
       },
     ],
-    commits: [],
+    commits: ["7b31092"],
   },
   {
     version: "6.4",

@@ -2,7 +2,7 @@
  * A short burst of confetti over the page (Proofread record celebrations). One canvas, removed when done; nothing
  * happens for people who turned animation off (prefers-reduced-motion). No library.
  */
-export function confetti({ colors, pieces = 140, duration = 2600 }: { colors: string[]; pieces?: number; duration?: number }) {
+export function confetti({ colors, pieces = 140, duration = 2600, origin }: { colors: string[]; pieces?: number; duration?: number; origin?: { x: number; y: number } }) {
   if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const canvas = document.createElement("canvas");
   canvas.setAttribute("aria-hidden", "true");
@@ -14,14 +14,14 @@ export function confetti({ colors, pieces = 140, duration = 2600 }: { colors: st
   const h = (canvas.height = window.innerHeight * dpr);
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas.remove();
-  // two cannons from the lower corners, aimed up and inwards
+  // two cannons from the lower corners, aimed up and inwards; or one burst all around `origin` (page pixels)
   const parts = Array.from({ length: pieces }, (_, i) => {
     const left = i % 2 === 0;
-    const angle = (left ? -60 : -120) * (Math.PI / 180) + (Math.random() - 0.5) * 0.7;
-    const speed = (14 + Math.random() * 12) * dpr;
+    const angle = origin ? -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6 : (left ? -60 : -120) * (Math.PI / 180) + (Math.random() - 0.5) * 0.7;
+    const speed = (origin ? 6 + Math.random() * 9 : 14 + Math.random() * 12) * dpr;
     return {
-      x: left ? w * 0.08 : w * 0.92,
-      y: h * 0.95,
+      x: origin ? origin.x * dpr : left ? w * 0.08 : w * 0.92,
+      y: origin ? origin.y * dpr : h * 0.95,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       size: (5 + Math.random() * 6) * dpr,

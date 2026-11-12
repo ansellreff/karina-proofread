@@ -1,6 +1,6 @@
 "use client";
 
-import { ArchiveRestore, CheckCircle2, ChevronDown, Download, ExternalLink, MoreHorizontal, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCircle2, ChevronDown, Download, ExternalLink, MoreHorizontal, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore } from "react";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ARCHIVE_DAYS, archivesIn, isArchived } from "@/lib/store/archive";
 import { TRASH_DAYS, type Job, type JobStatus, type TrashEntry } from "@/lib/store/types";
 import {
   AlertDialog,
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "new" | "ready" | "done";
+type Tab = "all" | "new" | "ready" | "done" | "archived";
 type Sort = "updated" | "name" | "score";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -33,8 +34,14 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "new", label: "Waiting" },
   { id: "ready", label: "Ready to review" },
   { id: "done", label: "Done" },
+  { id: "archived", label: "Archived" },
 ];
-const inTab = (j: Job, t: Tab) => t === "all" || j.status === t || (t === "new" && j.status === "proofreading");
+/** Archived documents (done for ARCHIVE_DAYS days) are only in Archived, not in All or Done. */
+const inTab = (j: Job, t: Tab, now: number) => {
+  const archived = isArchived(j, now);
+  if (t === "archived" || archived) return t === "archived" && archived;
+  return t === "all" || j.status === t || (t === "new" && j.status === "proofreading");
+};
 
 /**
  * Last updated, as Karina reads dates: "Thu, 2026/10/29" and "21:00" (24-hour), shown on one line on phones and
@@ -54,6 +61,7 @@ const byUpdated = (a: Job, b: Job) => (Date.parse(b.updatedAt) || 0) - (Date.par
 /** The exact time, on hover. */
 const whenExactly = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+const matches = (j: Job, q: string) => !q || [j.studentName ?? "", j.fileName, j.docType].some((s) => s.toLowerCase().includes(q));
 const scoreOf = (j: Job) => j.score?.total ?? j.proofread?.score?.original.total ?? null;
 const tone = (n: number) => (n >= 85 ? "text-ins" : n >= 70 ? "text-foreground" : "text-del");
 /** Columns from tablet-landscape width up; narrower screens stack each document as a small card. */
@@ -65,7 +73,7 @@ function foreverIn(expiresAt: string) {
   return days <= 0 ? "deleted forever today" : days === 1 ? "deleted forever tomorrow" : `deleted forever in ${days} days`;
 }
 
-export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { jobs: Job[]; trashCount: number; initialQuery: string; initialTab: Tab }) {
+export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now }: { jobs: Job[]; trashCount: number; initialQuery: string; initialTab: Tab; now: number }) {
   const router = useRouter();
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [query, setQuery] = useState(initialQuery);
@@ -94,15 +102,22 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
   };
 
   const visible = jobs.filter((j) => !hidden.has(j.id));
-  const counts = Object.fromEntries(TABS.map((t) => [t.id, visible.filter((j) => inTab(j, t.id)).length])) as Record<Tab, number>;
+  const counts = Object.fromEntries(TABS.map((t) => [t.id, visible.filter((j) => inTab(j, t.id, now)).length])) as Record<Tab, number>;
+  const q = query.trim().toLowerCase();
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = visible.filter((j) => inTab(j, tab) && (!q || [j.studentName ?? "", j.fileName, j.docType].some((s) => s.toLowerCase().includes(q))));
+    const list = visible.filter((j) => inTab(j, tab, now) && matches(j, q));
     if (sort === "name") list.sort((a, b) => (a.studentName ?? a.fileName).localeCompare(b.studentName ?? b.fileName));
     else if (sort === "score") list.sort((a, b) => (scoreOf(a) ?? 101) - (scoreOf(b) ?? 101)); // lowest score first: needs most work
+    else if (tab === "archived") list.sort((a, b) => Date.parse(b.doneAt ?? b.updatedAt) - Date.parse(a.doneAt ?? a.updatedAt));
     else list.sort(byUpdated);
     return list;
-  }, [visible, tab, query, sort]);
+  }, [visible, tab, q, sort, now]);
+  // a search also finding archived documents points there
+  const archivedMatches = q && tab !== "archived" ? visible.filter((j) => isArchived(j, now) && matches(j, q)).length : 0;
+  const showArchived = () => {
+    setTab("archived");
+    keepInUrl(query, "archived");
+  };
 
   const loadTrash = async () => {
     const list = (await (await fetch("/api/trash", { cache: "no-store" })).json()) as TrashEntry[];
@@ -209,25 +224,42 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
         </div>
       </div>
 
+      {(tab === "archived" || tab === "done") && (
+        <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+          <Archive className="mt-0.5 size-4 shrink-0" />
+          {tab === "archived"
+            ? `Documents you marked as done more than ${ARCHIVE_DAYS} days ago. They stay here until you delete them; Reopen brings one back into review.`
+            : `A document moves to Archived ${ARCHIVE_DAYS} days after you mark it as done.`}
+        </p>
+      )}
+
       <section className="mt-4 overflow-hidden rounded-lg border bg-card" aria-label="Documents">
         <div className={cn("hidden gap-x-4 border-b py-2 pr-2 pl-5 text-xs text-muted-foreground md:grid", COLS)}>
           <span>Student</span>
           <span>Type</span>
           <span>Status and score</span>
-          <span className="text-right">Updated</span>
+          <span className="text-right">{tab === "archived" ? "Marked as done" : "Updated"}</span>
           <span className="sr-only">Actions</span>
         </div>
         {shown.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-            {visible.length === 0 ? "No documents yet. Drop a student’s Word or PDF file above to start." : query ? `Nothing matches “${query}”.` : "Nothing in this list."}
+            {visible.length === 0
+              ? "No documents yet. Drop a student’s Word or PDF file above to start."
+              : query
+                ? `Nothing matches “${query}”${archivedMatches ? " here" : ""}.`
+                : tab === "archived"
+                  ? `Nothing archived yet. Documents come here ${ARCHIVE_DAYS} days after you mark them as done.`
+                  : "Nothing in this list."}
           </p>
         ) : (
           <ul className="divide-y">
             {shown.map((job) => {
               const changes = job.proofread?.changeCount ?? job.proofread?.changes.length;
               const score = scoreOf(job);
-              const updated = when(job.updatedAt, mounted);
-              const exactly = mounted ? whenExactly(job.updatedAt) : undefined;
+              const at = tab === "archived" ? (job.doneAt ?? job.updatedAt) : job.updatedAt;
+              const updated = when(at, mounted);
+              const exactly = mounted ? whenExactly(at) : undefined;
+              const soon = archivesIn(job, now);
               return (
                 <li key={job.id} className={cn("group grid grid-cols-[1fr_auto] items-center gap-x-2 pr-2 pl-4 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 md:gap-x-4 md:pl-5", COLS)}>
                   <Link
@@ -252,7 +284,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
                         {updated.date} {updated.time}
                       </p>
                     </div>
-                    <div className="col-span-2 flex items-center gap-2.5 md:col-span-1">
+                    <div className="col-span-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 md:col-span-1">
                       <StatusChip status={job.status} />
                       {score !== null && (
                         <span className="inline-flex shrink-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="Score out of 100: original → latest">
@@ -260,6 +292,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
                           <span className={cn("font-serif text-sm font-semibold", tone(score))}>{score}</span>
                         </span>
                       )}
+                      {soon && <span className="basis-full text-xs text-muted-foreground">{soon}</span>}
                     </div>
                     <span className="hidden text-right whitespace-nowrap tabular-nums md:block" title={exactly}>
                       <span className="block text-sm text-muted-foreground">{updated.date}</span>
@@ -299,6 +332,15 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab }: { 
               );
             })}
           </ul>
+        )}
+        {archivedMatches > 0 && (
+          <button
+            type="button"
+            onClick={showArchived}
+            className="flex w-full items-center justify-center gap-1.5 border-t px-5 py-2.5 text-sm text-muted-foreground hover:bg-secondary/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <Archive className="size-4" /> {archivedMatches} more {archivedMatches === 1 ? "match" : "matches"} in Archived
+          </button>
         )}
       </section>
 

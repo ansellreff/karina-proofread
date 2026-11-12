@@ -16,12 +16,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { LEVELS, levelOf } from "@/lib/record/levels";
+import { LEVELS, levelOf, type Level } from "@/lib/record/levels";
 import type { RecordMethod, RecordSummary } from "@/lib/record/store";
 import type { RecordRow } from "@/lib/record/view";
 import { cn } from "@/lib/utils";
 import { confetti, cssColor } from "./confetti";
-import { Trophy } from "./trophy";
+import { TrophyCabinet, TrophySpotlight, type ShelfItem } from "./trophy-showcase";
 
 export type ShownEntry = RecordRow;
 
@@ -73,6 +73,15 @@ export function RecordPage({ summary, entries, preview }: { summary: RecordSumma
   const done = useRef(false);
   const { level, next } = summary.level;
   const gap = summary.worked - summary.finished;
+  // the trophy in the spotlight: her current one, or the one she picked in the cabinet
+  const [shown, setShown] = useState<Level["id"]>(level.id);
+  const spotlight = useRef<HTMLDivElement>(null);
+  const show = (id: Level["id"]) => {
+    setShown(id);
+    // on a phone the spotlight is above the cabinet: bring it into view
+    const r = spotlight.current?.getBoundingClientRect();
+    if (r && (r.bottom < 80 || r.top > window.innerHeight - 120)) spotlight.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   // celebrate what changed since the last visit (remembered per browser), then remember now
   useEffect(() => {
@@ -95,7 +104,12 @@ export function RecordPage({ summary, entries, preview }: { summary: RecordSumma
     const colors = [metal, cssColor("--primary"), cssColor("--trophy-gold"), cssColor("--trophy-diamond"), cssColor("--del")];
     if (levelUp) {
       setCheer({ title: `You reached ${level.name}!`, text: `${plural(moreFinished, "more document")} finished since your last visit. ${level.cheer}`, big: true });
-      confetti({ colors, pieces: 260, duration: 3400 });
+      // the award: the trophy she had last time is swapped for the new one
+      setShown(levelOf(before.finished).level.id);
+      setTimeout(() => {
+        setShown(level.id);
+        confetti({ colors, pieces: 260, duration: 3400 });
+      }, 1200);
     } else if (caughtUp) {
       setCheer({ title: "All caught up!", text: "Every document you worked on is finished. Well done.", big: true });
       confetti({ colors, pieces: 200, duration: 3000 });
@@ -111,9 +125,20 @@ export function RecordPage({ summary, entries, preview }: { summary: RecordSumma
   const finished = useCountUp(summary.finished, seen?.finished ?? summary.finished);
   const toNext = next ? next.at - summary.finished : 0;
   const levelProgress = next ? (summary.finished - level.at) / (next.at - level.at) : 1;
-  /** When each level was reached: the date the Nth document was finished. */
-  const finishedDates = entries.map((e) => e.finishedAt).filter((d): d is string => !!d).sort();
+  /** When each level was reached, and with which document: the Nth finished one. */
+  const finishedInOrder = entries.filter((e) => e.finishedAt).sort((a, b) => a.finishedAt!.localeCompare(b.finishedAt!));
   const maxMonth = Math.max(1, ...summary.byMonth.map((m) => m.worked));
+  const items: ShelfItem[] = LEVELS.map((l) => {
+    const by = l.at > 0 ? finishedInOrder[l.at - 1] : undefined;
+    const type = by ? (by.docType === "Unknown" ? "document" : by.docType) : "";
+    return {
+      level: l,
+      earned: summary.finished >= l.at,
+      reachedOn: by ? day(by.finishedAt!) : undefined,
+      earnedWith: by ? `${/^[aeiou]/i.test(type) ? "an" : "a"} ${type} for ${by.firstName ?? "a student"}` : undefined,
+      isNew: seen !== null && l.at > 0 && l.at > seen.finished && l.at <= summary.finished,
+    };
+  });
 
   async function remove() {
     const e = removing;
@@ -134,7 +159,9 @@ export function RecordPage({ summary, entries, preview }: { summary: RecordSumma
         style={{ backgroundImage: "radial-gradient(ellipse 60% 70% at 28% 45%, var(--spotlight), transparent 70%)" }}
       >
         <div className="grid items-center gap-4 p-6 sm:p-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] md:gap-8 md:p-10">
-          <Trophy level={level.id} finished={finished} />
+          <div ref={spotlight}>
+            <TrophySpotlight items={items} shown={shown} current={level.id} finished={finished} onShow={setShown} />
+          </div>
           <div className="space-y-5">
             {cheer && (
               <div role="status" data-cheer className={cn("record-cheer rounded-lg border px-4 py-3", cheer.big ? "border-primary bg-secondary" : "bg-background")}>
@@ -200,40 +227,17 @@ export function RecordPage({ summary, entries, preview }: { summary: RecordSumma
         </div>
       </section>
 
-      {/* the badge shelf */}
+      {/* the trophy cabinet: every level, click one to put it in the spotlight */}
       <section aria-labelledby="levels-title" className="space-y-3">
-        <h2 id="levels-title" className="text-lg font-semibold">
-          Levels
-        </h2>
-        <ol className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
-          {LEVELS.map((l) => {
-            const earned = summary.finished >= l.at;
-            const reachedOn = l.at > 0 ? finishedDates[l.at - 1] : undefined;
-            return (
-              <li
-                key={l.id}
-                data-badge={l.id}
-                data-earned={earned || undefined}
-                className={cn("flex flex-col items-center gap-1.5 rounded-xl border bg-card px-2 py-3 text-center", !earned && "opacity-55")}
-                style={{ "--metal": `var(--trophy-${l.id})` } as React.CSSProperties}
-              >
-                <span
-                  aria-hidden
-                  className="flex size-11 items-center justify-center rounded-full border-2 font-serif text-sm font-semibold"
-                  style={
-                    earned
-                      ? { background: "radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--metal) 45%, var(--trophy-shine)), var(--metal))", borderColor: "var(--metal)", color: "var(--trophy-ink)" }
-                      : { borderStyle: "dashed", borderColor: "var(--border)" }
-                  }
-                >
-                  {l.at}
-                </span>
-                <span className="text-xs font-medium">{l.name}</span>
-                <span className="text-[11px] text-muted-foreground">{earned ? (reachedOn ? day(reachedOn) : "Earned") : `${l.at - summary.finished} more`}</span>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="levels-title" className="text-lg font-semibold">
+            Your trophy cabinet
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {summary.level.index} of {LEVELS.length - 1} trophies won. Tap one to put it in the spotlight, and tap the big trophy to celebrate.
+          </p>
+        </div>
+        <TrophyCabinet items={items} shown={shown} finished={summary.finished} onShow={show} />
       </section>
 
       {/* the numbers */}

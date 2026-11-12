@@ -50,6 +50,8 @@ export interface Job {
   sourceFile?: { name: string; kind: "pdf"; notes: string[] };
   /** "Proofread it myself": Karina proofreads this one by hand, without bot help (Proofread record: manual). */
   manual?: { at: string };
+  /** When it was marked as done (cleared when reopened); 14 days later it moves to Archived (lib/store/archive). */
+  doneAt?: string;
 }
 
 export interface Settings {
