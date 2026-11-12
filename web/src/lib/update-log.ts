@@ -38,8 +38,8 @@ export const RELEASES: Release[] = [
     version: "6.5",
     date: "2026-11-12",
     kind: "minor",
-    title: "AI-made documents, Archive and a trophy cabinet",
-    summary: "The AI spots documents made entirely by AI, finished documents move to Archived two weeks after you mark them as done, and the Proofread record has a trophy cabinet you can play with.",
+    title: "AI-made documents, Archive, Priority list and a trophy cabinet",
+    summary: "The AI spots documents made entirely by AI, finished documents move to Archived two weeks after you mark them as done, you can keep your own Priority list and see when each document was uploaded, and the Proofread record has a trophy cabinet you can play with.",
     points: [
       {
         kind: "new",
@@ -68,6 +68,24 @@ export const RELEASES: Release[] = [
         where: "Documents → ⋯ menu",
       },
       {
+        kind: "new",
+        text: "Priority list: tap the star on any document to put it on your Priority list, and it gets a number (1, 2, 3 …) that shows in every list. In the new Priority tab you put them in your own order by dragging a document by its handle (or with the arrow keys); “Move to the top of Priority” is in the ⋯ menu. Marking a document as done takes it off the list.",
+        href: "/?status=priority",
+        where: "Documents → Priority",
+      },
+      {
+        kind: "new",
+        text: "Every document now shows when it was uploaded as well as when it was last updated, and the documents still to finish carry their place in the queue (#1 has waited longest). Sort by “Upload order” to work through them first come, first served, or by “Newest uploads”. The app remembers the sort you chose.",
+        href: "/",
+        where: "Documents",
+      },
+      {
+        kind: "improved",
+        text: "Switching between All, Priority, Waiting, Ready to review, Done and Archived (or changing the sort or search) no longer jumps: the highlight slides to the tab you chose, the documents that stay glide into their new places, new ones rise in one after another and the others fade away.",
+        href: "/",
+        where: "Documents",
+      },
+      {
         kind: "improved",
         text: "Marking a document as done sends a green check spinning out of the menu you used into the middle of the screen. Reopening one does the same with a folder that opens and lets the document back out.",
       },
@@ -84,7 +102,7 @@ export const RELEASES: Release[] = [
         where: "Proofread record",
       },
     ],
-    commits: ["7b31092", "5ac9bf3"],
+    commits: ["7b31092", "5ac9bf3", "772f52c", "26e0c8c", "fc795da"],
   },
   {
     version: "6.4",

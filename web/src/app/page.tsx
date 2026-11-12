@@ -25,7 +25,7 @@ export default async function Inbox(props: PageProps<"/">) {
   const waiting = jobs.filter((j) => j.status === "new" && !isArchived(j, now)).length;
   const ready = jobs.filter((j) => j.status === "ready" && !isArchived(j, now)).length;
   const q = typeof params.q === "string" ? params.q : "";
-  const status = (["new", "ready", "done", "archived"] as const).find((s) => s === params.status) ?? "all";
+  const status = (["priority", "new", "ready", "done", "archived"] as const).find((s) => s === params.status) ?? "all";
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">

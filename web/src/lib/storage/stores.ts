@@ -11,18 +11,28 @@ import { neonQuery, PgFiles, pgliteQuery, type Query } from "./pg-files";
 
 export type { Stores };
 
-/** One connection per server instance (PGlite must be a single instance per folder). */
-let cached: { url: string; files: PgFiles } | null = null;
+/**
+ * One connection per server instance, kept on globalThis: Next.js bundles pages and route handlers separately, and
+ * a module-level variable would give each its own copy. For PGlite that meant two databases on one folder (the page
+ * never saw what a route saved); it must be a single instance per folder.
+ */
+const shared = globalThis as { __kpCloudFiles?: { url: string; files: Promise<PgFiles> } };
 
-async function cloudFiles(url: string): Promise<PgFiles> {
-  if (cached?.url === url) return cached.files;
-  let query: Query;
-  if (url.startsWith("pglite:")) {
-    if (process.env.VERCEL) throw new Error("PGlite is for this computer only.");
-    query = await pgliteQuery(url.slice("pglite:".length) || undefined);
-  } else query = await neonQuery(url);
-  cached = { url, files: new PgFiles(query) };
-  return cached.files;
+function cloudFiles(url: string): Promise<PgFiles> {
+  if (shared.__kpCloudFiles?.url === url) return shared.__kpCloudFiles.files;
+  const files = (async () => {
+    let query: Query;
+    if (url.startsWith("pglite:")) {
+      if (process.env.VERCEL) throw new Error("PGlite is for this computer only.");
+      query = await pgliteQuery(url.slice("pglite:".length) || undefined);
+    } else query = await neonQuery(url);
+    return new PgFiles(query);
+  })();
+  shared.__kpCloudFiles = { url, files };
+  files.catch(() => {
+    if (shared.__kpCloudFiles?.files === files) delete shared.__kpCloudFiles; // try again on the next request
+  });
+  return files;
 }
 
 export async function stores(): Promise<Stores> {

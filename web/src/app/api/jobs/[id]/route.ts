@@ -23,6 +23,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!STATUSES.includes(body.status)) return Response.json({ error: "Unknown status." }, { status: 400 });
     // the archive timer starts when it is marked as done; reopening stops it and takes the document out of Archived
     if (body.status === "done" && job.status !== "done") job.doneAt = new Date().toISOString();
+    if (body.status === "done") delete job.priority; // finished: it leaves the Priority list
     if (body.status !== "done") {
       delete job.doneAt;
       delete job.archivedAt;

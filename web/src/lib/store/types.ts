@@ -54,6 +54,8 @@ export interface Job {
   doneAt?: string;
   /** "Add to Archive": put in Archived by hand, whatever its status (cleared by Remove from Archive or Reopen). */
   archivedAt?: string;
+  /** Place in Karina's Priority list (lower = sooner; shown as 1, 2, 3 … without gaps; cleared by Mark as done). */
+  priority?: number;
 }
 
 export interface Settings {

@@ -30,6 +30,9 @@
   --color-ins: var(--ins);
   --color-del: var(--del);
   --color-mark: var(--mark);
+  --color-mark-foreground: var(--mark-foreground);
+  --color-star: var(--star);
+  --color-star-soft: var(--star-soft);
   --color-logo: var(--logo);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -63,6 +66,9 @@
   --del: #b42318;
   --mark: #f5e27a;
   --mark-foreground: #5c4a00;
+  /* Priority list: the star and the number badge (badge text = --mark-foreground) */
+  --star: #b06f00;
+  --star-soft: #fbefd2;
   --shadow-color: 30 36 48;
   /* behind the logo: its navy outlines need a light ground in both themes */
   --logo: #ffffff;
@@ -108,6 +114,8 @@
   --del: #ff7b72;
   --mark: #b8962a;
   --mark-foreground: #f2dc8c;
+  --star: #f0b941;
+  --star-soft: #3a3122;
   --shadow-color: 0 0 0;
   --logo: #eef0f5;
   --spotlight: #2a2a3d;
@@ -597,6 +605,44 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
   background: radial-gradient(ellipse 70% 60% at 50% 40%, color-mix(in srgb, var(--metal) 28%, transparent), transparent 75%);
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--metal) 70%, transparent);
   transform: translateY(-3px);
+}
+
+/* Documents list: the sliding tab highlight, the star, and a row picked up in the Priority list */
+.tab-glider[data-ready] {
+  transition:
+    transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.star-toggle[data-on="true"] svg {
+  fill: var(--star);
+  color: var(--star);
+  animation: star-pop 450ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes star-pop {
+  0% {
+    transform: scale(0.6) rotate(-30deg);
+  }
+  60% {
+    transform: scale(1.25) rotate(8deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.doc-row[data-dragging="true"] {
+  position: relative;
+  z-index: 5;
+  background: var(--card);
+  box-shadow:
+    0 14px 28px -10px rgb(var(--shadow-color) / 0.35),
+    0 0 0 1px var(--border);
+  border-radius: var(--radius);
+  cursor: grabbing;
+}
+.drag-grip {
+  touch-action: none;
+  cursor: grab;
 }
 
 @media (prefers-reduced-motion: reduce) {
