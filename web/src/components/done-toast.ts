@@ -1,12 +1,14 @@
 import { toast } from "sonner";
+import { popDoneCheck } from "./done-pop";
 
 export interface Learned {
   record: string;
   proposals: number;
 }
 
-/** "Marked as done", plus what the bot learned from it (Review rules → From your reviews). */
+/** "Marked as done" (with the green check popping up), plus what the bot learned from it (Review rules → From your reviews). */
 export function toastDone(learned: Learned | undefined, open: () => void): void {
+  popDoneCheck();
   if (!learned) return void toast.success("Marked as done");
   toast.success("Marked as done", {
     description: learned.proposals

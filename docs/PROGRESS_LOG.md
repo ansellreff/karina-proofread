@@ -1119,7 +1119,11 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 - **Checked on her 44 training files:** only the example is "python-docx, never edited in Word". One other python-docx file (a video script) was edited in Word afterwards, and the two other files without Word editing marks were not made by python-docx, so they get no file clue.
 - **Not done:** comparing a document with other students' documents (her strongest clue) — the AI sees one document at a time. Not tried on a real AI proofread yet (AI credit).
 
-## V.6.6: Archive and a trophy cabinet (2026-11-12)
+## V.6.5 (continued): Archive, a trophy cabinet and the done check (2026-11-12)
+All of today's changes are one release, V.6.5 (Karina's choice); this part was first numbered V.6.6.
+
+- **Done check:** marking a document as done (Documents list or review page) pops up a green check in the middle of the screen for about a second (`components/done-pop.ts`, run by `toastDone`).
+
 **Request:** an Archived category on the Documents page for documents marked as done 2 weeks ago (only those: new and ongoing reviews never), still viewable but not in All, Waiting, Ready to review or Done; and a more interactive, creative Proofread record page where she can click any trophy in her showcase, with an animation each time it changes. Also a .bat file to run the app on this PC.
 
 - **Archive timer:** documents now remember when they were marked as done (`doneAt`, set by Mark as done, cleared by Reopen). Documents finished before this update use the Proofread record's finished time, then their last update. After 14 days (`ARCHIVE_DAYS`, `lib/store/archive.ts`) a done document shows only in the new Archived tab, with its "Marked as done" date. Re-proofreading or reopening takes it out of Done, so it leaves the archive.
