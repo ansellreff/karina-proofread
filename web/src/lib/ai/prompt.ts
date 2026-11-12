@@ -1,3 +1,4 @@
+import type { FileFacts } from "../docx/file-facts";
 import type { LearnedExample } from "../learn/proposals";
 import type { LearnStore } from "../learn/store";
 import type { ChangeRecord } from "../pipeline";
@@ -78,6 +79,18 @@ Rules:
 </how_to_answer>`;
 }
 
+/** What the file shows outside the body text (private evidence: never quoted in the document). */
+function fileFactsBlock(file: FileFacts | undefined): string {
+  if (!file) return "";
+  const facts = [
+    file.madeBy &&
+      `- The file was created by ${file.madeBy}, a program (AI chat tools use it to produce Word files)${file.neverEditedInWord ? ", and its text was never edited in Word" : ""}.`,
+    file.header && `- Page header: ${file.header}`,
+    file.footer && `- Page footer: ${file.footer}`,
+  ].filter(Boolean);
+  return facts.length ? `\n<file_facts>\n${facts.join("\n")}\n</file_facts>\n` : "";
+}
+
 /** The per-document user message. */
 export function userPrompt(ctx: RuleContext, ruleChanges: ChangeRecord[]): string {
   const lines = ctx.paras
@@ -91,7 +104,7 @@ export function userPrompt(ctx: RuleContext, ruleChanges: ChangeRecord[]): strin
   return `<document type="${ctx.docType}" words="${words}">
 ${lines.join("\n")}
 </document>
-
+${fileFactsBlock(ctx.file)}
 <already_done>
 ${done.length ? done.join("\n") : "- (nothing)"}
 </already_done>

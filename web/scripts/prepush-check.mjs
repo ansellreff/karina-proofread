@@ -34,7 +34,7 @@ const SECRET = /sk-ant-[A-Za-z0-9_-]{10,}|postgres(ql)?:\/\/[^\s"'<]+@|npg_[A-Za
 for (const line of diff.split("\n")) if (line.startsWith("+") && SECRET.test(line)) problems.push(`looks like a key or password: ${line.slice(1, 60)}…`);
 
 // 3. student names: from the document folders' file names and the names the app detected (local data)
-const COMMON = new Set("done study plan studyplan autobio autobiography statement purpose statementofpurpose essay resume personal master program final revised copy bachelor taiwan university scholarship english doctoral docx with from review checked proofreading taipei tech nycu nthu ncku nccu nyust ntust ncue recommendation letter video script".split(" "));
+const COMMON = new Set("done study plan studyplan autobio autobiography statement purpose statementofpurpose essay resume personal master program final revised copy bachelor taiwan university scholarship english doctoral docx with from review checked proofreading taipei tech nycu nthu ncku nccu nyust ntust ncue recommendation letter video script working draft".split(" "));
 const names = new Set();
 const addName = (s) => {
   for (const t of String(s ?? "").split(/[_\s()\-.,'’]+/)) if (t.length >= 4 && /^\p{L}+$/u.test(t) && !COMMON.has(t.toLowerCase())) names.add(t.toLowerCase());

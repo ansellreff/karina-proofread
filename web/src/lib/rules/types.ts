@@ -1,3 +1,4 @@
+import type { FileFacts } from "../docx/file-facts";
 import type { NewParagraph } from "../docx/revise";
 import { DEFAULT_RULES, type RuleConfig } from "./config";
 
@@ -33,6 +34,8 @@ export interface RuleContext {
   fullText: string;
   /** Karina's review rules (the Review rules page). Defaults when omitted. */
   config?: RuleConfig;
+  /** What the file itself shows (the program that made it, header/footer); for the AI only. */
+  file?: FileFacts;
 }
 
 export const rulesOf = (ctx: RuleContext): RuleConfig => ctx.config ?? DEFAULT_RULES;
