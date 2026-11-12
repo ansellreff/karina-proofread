@@ -1122,7 +1122,7 @@ Then Phase B (OneDrive locally with her account) and Phase C (deploy, test on he
 ## V.6.5 (continued): Archive, a trophy cabinet and the done check (2026-11-12)
 All of today's changes are one release, V.6.5 (Karina's choice); this part was first numbered V.6.6.
 
-- **Done check:** marking a document as done (Documents list or review page) pops up a green check in the middle of the screen for about a second (`components/done-pop.ts`, run by `toastDone`).
+- **Done and Reopen animations** (`components/done-pop.ts`): the badge starts at the menu button that was used (the "⋯" in the Documents list, Export on the review page; found by its `data-popup-open` mark while the menu is open), spins one turn while it grows into the middle of the screen, lands with a ripple, pauses and fades (2.4 s; Reopen 2.8 s, slowed down at Karina's request). Mark as done: a green check. Reopen: a folder whose front flap falls open and the document rises out. No spin with reduced motion. `scripts/status-pop-shots.mjs` records frames with the status change intercepted in the browser, so no document changes.
 
 **Request:** an Archived category on the Documents page for documents marked as done 2 weeks ago (only those: new and ongoing reviews never), still viewable but not in All, Waiting, Ready to review or Done; and a more interactive, creative Proofread record page where she can click any trophy in her showcase, with an animation each time it changes. Also a .bat file to run the app on this PC.
 

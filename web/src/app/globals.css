@@ -482,27 +482,53 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
   }
 }
 
-/* Mark as done: a green check pops up in the middle of the screen (components/done-pop.ts) */
-.done-pop {
+/* Mark as done / Reopen: a badge flies from the menu button into the middle of the screen (components/done-pop.ts;
+   the flight itself is animated in script, the details here start once it has arrived) */
+.status-pop {
   position: fixed;
   top: 50%;
   left: 50%;
   z-index: 70;
-  width: 7rem;
-  height: 7rem;
-  margin: -3.5rem 0 0 -3.5rem;
+  width: 8rem;
+  height: 8rem;
+  margin: -4rem 0 0 -4rem;
   pointer-events: none;
-  animation: done-pop 1200ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
 }
-.done-pop svg {
+.status-pop svg {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 10px 18px rgb(var(--shadow-color) / 0.3));
+  overflow: visible;
+  filter: drop-shadow(0 12px 20px rgb(var(--shadow-color) / 0.32));
 }
-.done-pop circle {
-  fill: var(--ins);
+.status-pop-done {
+  --pop-color: var(--ins);
 }
-.done-pop path {
+.status-pop-reopen {
+  --pop-color: var(--primary);
+}
+.status-pop-done .pop-badge {
+  fill: var(--pop-color);
+}
+.pop-ring {
+  fill: none;
+  stroke: var(--pop-color);
+  stroke-width: 3;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop-ring 900ms var(--land, 900ms) ease-out both;
+}
+@keyframes pop-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+.status-pop-done .pop-tick {
   fill: none;
   stroke: var(--background);
   stroke-width: 5;
@@ -510,32 +536,46 @@ html.dark[data-paper="dark"] :where(.superdoc-page, .superdoc-web-flow) img {
   stroke-linejoin: round;
   stroke-dasharray: 40;
   stroke-dashoffset: 40;
-  animation: done-tick 400ms 180ms ease-out forwards;
+  animation: pop-tick 450ms 120ms ease-out forwards; /* drawn at once, so the spin shows */
 }
-@keyframes done-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  25% {
-    opacity: 1;
-    transform: scale(1.12);
-  }
-  40% {
-    transform: scale(1);
-  }
-  80% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.9);
-  }
+/* the folder: the front flap falls open and the document rises out */
+.status-pop-reopen .pop-badge {
+  fill: var(--primary);
 }
-@keyframes done-tick {
+.status-pop-reopen .pop-folder-back {
+  fill: color-mix(in srgb, var(--primary-foreground) 60%, var(--primary));
+}
+.status-pop-reopen .pop-sheet rect {
+  fill: var(--primary-foreground);
+}
+.status-pop-reopen .pop-sheet path {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+.status-pop-reopen .pop-sheet {
+  animation: pop-sheet-out 650ms calc(var(--land, 1100ms) + 250ms) cubic-bezier(0.25, 0.8, 0.35, 1.2) both;
+}
+.status-pop-reopen .pop-folder-front {
+  fill: var(--primary-foreground);
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: pop-flap-open 600ms var(--land, 1100ms) cubic-bezier(0.3, 0.8, 0.4, 1) both;
+}
+@keyframes pop-tick {
   to {
     stroke-dashoffset: 0;
+  }
+}
+@keyframes pop-flap-open {
+  to {
+    transform: scaleY(0.5) skewX(-14deg);
+  }
+}
+@keyframes pop-sheet-out {
+  to {
+    transform: translateY(-9px) rotate(-6deg);
   }
 }
 

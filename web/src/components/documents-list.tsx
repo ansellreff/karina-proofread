@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { menuOrigin, popReopen } from "@/components/done-pop";
 import { toastDone, type Learned } from "@/components/done-toast";
 import { NativeSelect } from "@/components/rules/bits";
 import { StatusChip } from "@/components/status-chip";
@@ -136,10 +137,14 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
   }
 
   async function setStatus(job: Job, status: JobStatus) {
+    const from = menuOrigin(); // the "⋯" button: the animation starts there
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     if (!res.ok) return toast.error("Could not update the document.");
-    if (status === "done") toastDone(((await res.json()) as { learned?: Learned }).learned, () => router.push("/rules?tab=learned"));
-    else toast.success("Back in review");
+    if (status === "done") toastDone(((await res.json()) as { learned?: Learned }).learned, () => router.push("/rules?tab=learned"), from);
+    else {
+      popReopen(from);
+      toast.success("Back in review");
+    }
     router.refresh();
   }
 

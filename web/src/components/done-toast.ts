@@ -7,8 +7,8 @@ export interface Learned {
 }
 
 /** "Marked as done" (with the green check popping up), plus what the bot learned from it (Review rules → From your reviews). */
-export function toastDone(learned: Learned | undefined, open: () => void): void {
-  popDoneCheck();
+export function toastDone(learned: Learned | undefined, open: () => void, origin: DOMRect | null = null): void {
+  popDoneCheck(origin);
   if (!learned) return void toast.success("Marked as done");
   toast.success("Marked as done", {
     description: learned.proposals

@@ -63,7 +63,7 @@ export const RELEASES: Release[] = [
       },
       {
         kind: "improved",
-        text: "Marking a document as done pops up a green check.",
+        text: "Marking a document as done sends a green check spinning out of the menu you used into the middle of the screen. Reopening one does the same with a folder that opens and lets the document back out.",
       },
       {
         kind: "new",

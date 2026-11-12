@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { AiUnlockDialog } from "@/components/ai-unlock";
+import { menuOrigin } from "@/components/done-pop";
 import { toastDone, type Learned } from "@/components/done-toast";
 import { RenameDialog } from "@/components/documents-list";
 import { setPaper, usePaper, type Paper } from "@/components/theme-provider";
@@ -602,12 +603,13 @@ export function Workspace({ initialJob, aiDefault, hasApiKey, authorName }: { in
   }
 
   async function markDone() {
+    const from = menuOrigin(); // the Export button: the check flies out of it
     const latest = dirty ? await save({ label: "Your edits" }) : job;
     const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "done" }) });
     if (res.ok) {
       const { learned, counted, ...updated } = (await res.json()) as Job & { learned?: Learned; counted?: number };
       setJob({ ...updated, current: latest.current });
-      toastDone(learned, () => router.push("/rules?tab=learned"));
+      toastDone(learned, () => router.push("/rules?tab=learned"), from);
       toastCounted(counted ?? null);
     }
   }
