@@ -81,7 +81,7 @@ export const RELEASES: Release[] = [
       },
       {
         kind: "improved",
-        text: "Sorting works like in most apps: click a column title (Student, Type, Status, Score, Updated or Uploaded) to sort by it, and click it again for the other way round (A–Z / Z–A, newest / oldest first …). The arrow shows which column and which way. The list starts as Student A–Z and remembers your last choice. On a phone the same titles sit in a row above the list.",
+        text: "Sorting works like in most apps: click a column title (Student, Type, Status, Score, Updated or Uploaded) to sort by it, and click it again for the other way round (A–Z / Z–A, newest / oldest first …). The arrow shows which column and which way. The first time the app is opened the list shows the newest uploads first; after that it remembers your last choice. On a phone the same titles sit in a row above the list.",
         href: "/",
         where: "Documents",
       },

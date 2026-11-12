@@ -1149,3 +1149,4 @@ Also part of V.6.5. From now on, all changes made on the same day are one releas
   - **Star:** it is now the first column of every row (a big outline star; once starred, a filled star with the number on a soft gold background). Done and archived documents have none. The number badge next to the name is gone, because the star carries it.
   - **Priority tab:** each row starts with a drag handle, the number (tap it to pick a place from 1 to n, each named "instead of <student>", or Remove from Priority) and ▲ ▼ buttons. Dragging needs the search cleared; the buttons and the number work anyway.
   - **Phones:** the type moved under the student's name (the file name shows only when there is no name), so names are no longer cut short.
+  - **Default sort changed (Karina's request):** the first time anyone opens the app, the list shows the newest uploads first (Uploaded, newest first) instead of Student A–Z; after that each browser remembers its last choice.

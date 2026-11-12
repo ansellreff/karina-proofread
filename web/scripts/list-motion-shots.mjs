@@ -45,10 +45,14 @@ await rows.first().waitFor();
 // both times on every row, and queue numbers for the open documents (the done one has none)
 check((await page.getByText(/^Uploaded/).count()) >= jobs.length, "upload time missing");
 check((await page.getByText(/#1 in queue/).count()) === 1, "queue number 1 missing");
-// sorting by the column titles: Student A–Z first; a click on Student turns it to Z–A; Uploaded twice = oldest first
+// sorting by the column titles: newest upload first at the start; Student A–Z, then Z–A; Uploaded again = newest, then oldest first
 const first = async () => (await rows.first().innerText()).split("\n").find((l) => l.trim().length > 2);
+const header = page.locator("section[aria-label=Documents] > div").first();
+check((await header.getByRole("button", { name: /^Uploaded: sorted Newest first/ }).count()) === 1, "default sort isn't newest upload first");
+const sortBy = (label) => header.getByRole("button", { name: new RegExp(`^(Sort by )?${label}`) }).click();
+await sortBy("Student");
+await page.waitForTimeout(800);
 const az = await first();
-const sortBy = (label) => page.locator("section[aria-label=Documents] > div").first().getByRole("button", { name: new RegExp(`^(Sort by )?${label}`) }).click();
 await sortBy("Student");
 await page.waitForTimeout(800);
 check((await first()) !== az, "Student: second click didn't turn the order round (Z–A)");

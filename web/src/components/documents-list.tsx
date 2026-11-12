@@ -56,7 +56,8 @@ type Tab = "all" | "priority" | "new" | "ready" | "done" | "archived";
 type SortKey = "student" | "type" | "status" | "score" | "updated" | "uploaded";
 type Dir = "asc" | "desc";
 type Sort = { key: SortKey; dir: Dir };
-const DEFAULT_SORT: Sort = { key: "student", dir: "asc" };
+/** The first time the app is opened: newest upload first (afterwards, the last choice in this browser). */
+const DEFAULT_SORT: Sort = { key: "uploaded", dir: "desc" };
 const FIRST_DIR: Record<SortKey, Dir> = { student: "asc", type: "asc", status: "asc", score: "asc", updated: "desc", uploaded: "desc" };
 const KEYS = Object.keys(FIRST_DIR) as SortKey[];
 const isSort = (s: unknown): s is Sort => !!s && typeof s === "object" && KEYS.includes((s as Sort).key) && ["asc", "desc"].includes((s as Sort).dir);
