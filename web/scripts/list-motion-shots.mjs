@@ -45,11 +45,19 @@ await rows.first().waitFor();
 // both times on every row, and queue numbers for the open documents (the done one has none)
 check((await page.getByText(/^Uploaded/).count()) >= jobs.length, "upload time missing");
 check((await page.getByText(/#1 in queue/).count()) === 1, "queue number 1 missing");
-await page.getByLabel("Sort").selectOption("queue");
+// sorting by the column titles: Student A–Z first; a click on Student turns it to Z–A; Uploaded twice = oldest first
+const first = async () => (await rows.first().innerText()).split("\n").find((l) => l.trim().length > 2);
+const az = await first();
+const sortBy = (label) => page.locator("section[aria-label=Documents] > div").first().getByRole("button", { name: new RegExp(`^(Sort by )?${label}`) }).click();
+await sortBy("Student");
+await page.waitForTimeout(800);
+check((await first()) !== az, "Student: second click didn't turn the order round (Z–A)");
+await sortBy("Uploaded");
+await sortBy("Uploaded");
 await page.waitForTimeout(250);
-await page.screenshot({ path: path.join(out, "sort-queue-mid.png") });
+await page.screenshot({ path: path.join(out, "sort-uploaded-mid.png") });
 await page.waitForTimeout(700);
-await page.screenshot({ path: path.join(out, "sort-queue.png") });
+await page.screenshot({ path: path.join(out, "sort-uploaded-oldest.png") });
 check((await rows.first().innerText()).includes("#1 in queue") || (await rows.first().innerText()).includes("Done"), "upload order: oldest not first");
 
 // star three documents; the Priority tab lists them 1, 2, 3
@@ -90,6 +98,17 @@ await grip(0).focus();
 await page.keyboard.press("ArrowDown");
 await page.waitForTimeout(1500);
 check((await names())[1] === before[2], "arrow key didn't move it down");
+// the ▲ button beside the number moves it back up
+await rows.nth(1).getByRole("button", { name: /up to number 1/ }).click();
+await page.waitForTimeout(1500);
+check((await names())[0] === before[2], "▲ didn't move it up");
+// tapping a number offers the places: the last one goes to number 1
+const last = (await names())[2];
+await rows.nth(2).getByRole("button", { name: /Choose another number/ }).click();
+await page.screenshot({ path: path.join(out, "number-menu.png") });
+await page.getByRole("menuitem", { name: /^1/ }).click();
+await page.waitForTimeout(1500);
+check((await names())[0] === last, "choosing number 1 didn't move it to the top");
 await page.screenshot({ path: path.join(out, "priority.png") });
 
 // shuffle between tabs: frames mid-way

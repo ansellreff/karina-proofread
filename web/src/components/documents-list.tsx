@@ -3,9 +3,13 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ArrowUpToLine,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   Download,
   ExternalLink,
   GripVertical,
@@ -24,13 +28,12 @@ import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type 
 import { toast } from "sonner";
 import { menuOrigin, popReopen } from "@/components/done-pop";
 import { toastDone, type Learned } from "@/components/done-toast";
-import { NativeSelect } from "@/components/rules/bits";
 import { StatusChip } from "@/components/status-chip";
 import { EASE_OUT, useListMotion } from "@/components/use-list-motion";
 import { usePreference } from "@/components/use-preference";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ARCHIVE_DAYS, archivedSince, archivesIn, isArchived } from "@/lib/store/archive";
 import { isOpen, priorityList, queueNumbers } from "@/lib/store/priority";
@@ -48,14 +51,24 @@ import {
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "priority" | "new" | "ready" | "done" | "archived";
-type Sort = "updated" | "queue" | "newest" | "name" | "score";
-const SORTS: { value: Sort; label: string }[] = [
-  { value: "updated", label: "Last updated" },
-  { value: "queue", label: "Upload order" }, // oldest first: the queue
-  { value: "newest", label: "Newest uploads" },
-  { value: "name", label: "Student A–Z" },
-  { value: "score", label: "Lowest score first" },
-];
+
+/** Sorting by a column header: a first click sorts the usual way, the next click the other way round. */
+type SortKey = "student" | "type" | "status" | "score" | "updated" | "uploaded";
+type Dir = "asc" | "desc";
+type Sort = { key: SortKey; dir: Dir };
+const DEFAULT_SORT: Sort = { key: "student", dir: "asc" };
+const FIRST_DIR: Record<SortKey, Dir> = { student: "asc", type: "asc", status: "asc", score: "asc", updated: "desc", uploaded: "desc" };
+const KEYS = Object.keys(FIRST_DIR) as SortKey[];
+const isSort = (s: unknown): s is Sort => !!s && typeof s === "object" && KEYS.includes((s as Sort).key) && ["asc", "desc"].includes((s as Sort).dir);
+const flip = (d: Dir): Dir => (d === "asc" ? "desc" : "asc");
+/** How each direction reads: "A–Z", "Newest first"… */
+function dirLabel(key: SortKey, dir: Dir) {
+  if (key === "student" || key === "type") return dir === "asc" ? "A–Z" : "Z–A";
+  if (key === "status") return dir === "asc" ? "Waiting first" : "Done first";
+  if (key === "score") return dir === "asc" ? "Lowest first" : "Highest first";
+  return dir === "desc" ? "Newest first" : "Oldest first";
+}
+const STATUS_ORDER: Record<JobStatus, number> = { new: 0, proofreading: 0, ready: 1, done: 2 };
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
@@ -85,8 +98,6 @@ export function when(iso: string, local = true) {
   const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(d);
   return { date: `${weekday}, ${y}/${m}/${day}`, weekday, day: `${y}/${m}/${day}`, time };
 }
-/** Newest first by the exact moment (date and time), whatever form the stored time stamp has. */
-const newestFirst = (pick: (j: Job) => string) => (a: Job, b: Job) => (Date.parse(pick(b)) || 0) - (Date.parse(pick(a)) || 0);
 /** The exact time, on hover. */
 const whenExactly = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -94,9 +105,57 @@ const matches = (j: Job, q: string) => !q || [j.studentName ?? "", j.fileName, j
 const scoreOf = (j: Job) => j.score?.total ?? j.proofread?.score?.original.total ?? null;
 const tone = (n: number) => (n >= 85 ? "text-ins" : n >= 70 ? "text-foreground" : "text-del");
 const nameOf = (j: Job) => j.studentName ?? j.fileName;
-/** Columns from tablet-landscape width up; narrower screens stack each document as a small card. The Priority list adds a handle column. */
-const COLS = "md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_10rem_10.5rem_4.5rem] lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_11rem_13rem_4.5rem]";
-const PCOLS = "md:grid-cols-[3.25rem_minmax(0,2fr)_minmax(0,1.2fr)_10rem_10.5rem_4.5rem] lg:grid-cols-[3.25rem_minmax(0,2fr)_minmax(0,1.2fr)_11rem_13rem_4.5rem]";
+const typeOf = (j: Job) => (j.docType === "Unknown" ? "Document" : j.docType);
+const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) || 0 : 0);
+
+/** The list in the chosen order (no score sorts last either way; ties by student name). */
+function sortJobs(list: Job[], { key, dir }: Sort, tab: Tab, now: number) {
+  const sign = dir === "asc" ? 1 : -1;
+  const by: Record<SortKey, (a: Job, b: Job) => number> = {
+    student: (a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base" }),
+    type: (a, b) => typeOf(a).localeCompare(typeOf(b)),
+    status: (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
+    score: (a, b) => (scoreOf(a) ?? 0) - (scoreOf(b) ?? 0),
+    // in Archived, "Updated" is the day it was archived
+    updated: (a, b) => (tab === "archived" ? time(archivedSince(a, now)) - time(archivedSince(b, now)) : time(a.updatedAt) - time(b.updatedAt)),
+    uploaded: (a, b) => time(a.createdAt) - time(b.createdAt),
+  };
+  return list.sort((a, b) => {
+    if (key === "score" && (scoreOf(a) === null) !== (scoreOf(b) === null)) return scoreOf(a) === null ? 1 : -1;
+    return by[key](a, b) * sign || by.student(a, b);
+  });
+}
+
+/**
+ * Columns from tablet-landscape width up (narrower screens stack each document as a small card): the star, then
+ * student, type, status and score, dates, and the ⋯ menu. The Priority list puts its order controls first instead.
+ */
+const COLS = "grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[3.25rem_minmax(0,2fr)_minmax(0,1.2fr)_10rem_10.5rem_2.25rem] lg:grid-cols-[3.25rem_minmax(0,2fr)_minmax(0,1.2fr)_11rem_13rem_2.25rem]";
+const PCOLS = "grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[6.75rem_minmax(0,2fr)_minmax(0,1.2fr)_10rem_10.5rem_2.25rem] lg:grid-cols-[6.75rem_minmax(0,2fr)_minmax(0,1.2fr)_11rem_13rem_2.25rem]";
+
+/** A column title that sorts the list: shows the direction while it is the one in use. */
+function SortButton({ k, label, sort, onSort, className }: { k: SortKey; label: string; sort: Sort; onSort: (k: SortKey) => void; className?: string }) {
+  const on = sort.key === k;
+  const next = on ? flip(sort.dir) : FIRST_DIR[k];
+  const Icon = on ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(k)}
+      aria-label={on ? `${label}: sorted ${dirLabel(k, sort.dir)}. Sort ${dirLabel(k, next)}` : `Sort by ${label}, ${dirLabel(k, next)}`}
+      title={on ? `Sorted ${dirLabel(k, sort.dir)}. Click for ${dirLabel(k, next)}` : `Sort by ${label} (${dirLabel(k, next)})`}
+      className={cn(
+        "group/sort -mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 whitespace-nowrap transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        on && "font-medium text-foreground",
+        className,
+      )}
+    >
+      {label}
+      {on && <span className="font-normal text-muted-foreground">{dirLabel(k, sort.dir)}</span>}
+      <Icon className={cn("size-3.5 shrink-0", !on && "opacity-40 group-hover/sort:opacity-100")} />
+    </button>
+  );
+}
 
 /** "deleted forever in 6 days" / "tomorrow" / "today". */
 function foreverIn(expiresAt: string) {
@@ -115,8 +174,9 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [savedSort, setSort] = usePreference<Sort>("documents-sort", "updated");
-  const sort = SORTS.some((s) => s.value === savedSort) ? savedSort : "updated";
+  const [savedSort, setSort] = usePreference<Sort>("documents-sort-by", DEFAULT_SORT);
+  const sort = isSort(savedSort) ? savedSort : DEFAULT_SORT;
+  const chooseSort = (key: SortKey) => setSort(sort.key === key ? { key, dir: flip(sort.dir) } : { key, dir: FIRST_DIR[key] });
   const [hidden, setHidden] = useState<Set<string>>(new Set()); // deleted, before the list refreshes
   const [renaming, setRenaming] = useState<Job | null>(null);
   const [trash, setTrash] = useState<TrashEntry[] | null>(null);
@@ -173,14 +233,12 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
       }
       return plist.filter((j) => matches(j, q));
     }
-    const list = visible.filter((j) => inTab(j, tab, now, ranks) && matches(j, q));
-    if (sort === "name") list.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-    else if (sort === "score") list.sort((a, b) => (scoreOf(a) ?? 101) - (scoreOf(b) ?? 101)); // lowest score first: needs most work
-    else if (sort === "queue") list.sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
-    else if (sort === "newest") list.sort(newestFirst((j) => j.createdAt));
-    else if (tab === "archived") list.sort(newestFirst((j) => archivedSince(j, now) ?? j.updatedAt));
-    else list.sort(newestFirst((j) => j.updatedAt));
-    return list;
+    return sortJobs(
+      visible.filter((j) => inTab(j, tab, now, ranks) && matches(j, q)),
+      sort,
+      tab,
+      now,
+    );
   }, [visible, plist, ranks, dragOrder, tab, q, sort, now]);
   // a search also finding archived documents points there
   const archivedMatches = q && tab !== "archived" ? visible.filter((j) => isArchived(j, now) && matches(j, q)).length : 0;
@@ -375,13 +433,20 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
   /** The two times on each row: the one the list is ordered by first. */
   const stampsFor = (job: Job): { label: string; iso: string }[] => {
     const uploaded = { label: "Uploaded", iso: job.createdAt };
-    const updated = { label: "Updated", iso: job.updatedAt };
-    if (sort === "queue" || sort === "newest") return [uploaded, tab === "archived" ? { label: "Archived", iso: archivedSince(job, now) ?? job.updatedAt } : updated];
-    if (tab === "archived") return [{ label: "Archived", iso: archivedSince(job, now) ?? job.updatedAt }, uploaded];
-    return [updated, uploaded];
+    const updated = tab === "archived" ? { label: "Archived", iso: archivedSince(job, now) ?? job.updatedAt } : { label: "Updated", iso: job.updatedAt };
+    return sort.key === "uploaded" && !isPriority ? [uploaded, updated] : [updated, uploaded];
   };
 
   const cols = isPriority ? PCOLS : COLS;
+  const updatedLabel = tab === "archived" ? "Archived" : "Updated";
+  const sortable: { k: SortKey; label: string }[] = [
+    { k: "student", label: "Student" },
+    { k: "type", label: "Type" },
+    { k: "status", label: "Status" },
+    { k: "score", label: "Score" },
+    { k: "updated", label: updatedLabel },
+    { k: "uploaded", label: "Uploaded" },
+  ];
 
   return (
     <>
@@ -422,21 +487,31 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
               className="pl-8"
             />
           </div>
-          {isPriority ? (
-            <p className="hidden shrink-0 text-xs text-muted-foreground sm:block">In your order</p>
-          ) : (
-            <NativeSelect ariaLabel="Sort" value={sort} onChange={setSort} options={SORTS} />
-          )}
         </div>
       </div>
+
+      {/* phones: the column titles are hidden, so the same sorting sits here */}
+      {!isPriority && (
+        <div className="mt-3 -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 md:hidden" role="group" aria-label="Sort documents">
+          <span className="shrink-0 text-xs text-muted-foreground">Sort</span>
+          {sortable.map((s) => (
+            <SortButton
+              key={s.k}
+              k={s.k}
+              label={s.label}
+              sort={sort}
+              onSort={chooseSort}
+              className={cn("mx-0 h-7 shrink-0 rounded-full border px-2.5 text-xs", sort.key === s.k ? "border-primary/40 bg-secondary" : "bg-card text-muted-foreground")}
+            />
+          ))}
+        </div>
+      )}
 
       {(tab === "archived" || tab === "done" || isPriority) && (
         <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
           {isPriority ? <Star className="mt-0.5 size-4 shrink-0 fill-star text-star" /> : <Archive className="mt-0.5 size-4 shrink-0" />}
           {isPriority
-            ? q
-              ? "Clear the search to change the order."
-              : "Your own order: drag a document by its handle, or select the handle and use the arrow keys. Tap the star on any document to add it; marking it as done takes it off."
+            ? "Your own order, number 1 first. Tap a number to give the document another place, use the arrows beside it, or drag it by its handle. Star documents in any list to add them; marking one as done takes it off."
             : tab === "archived"
               ? `Documents you added to Archive, and documents marked as done more than ${ARCHIVE_DAYS} days ago. They stay here until you delete them; Reopen or Remove from Archive brings one back.`
               : `A document moves to Archived ${ARCHIVE_DAYS} days after you mark it as done.`}
@@ -444,12 +519,36 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
       )}
 
       <section className="mt-4 overflow-hidden rounded-lg border bg-card" aria-label="Documents">
-        <div className={cn("hidden gap-x-4 border-b py-2 pr-2 text-xs text-muted-foreground md:grid", cols, isPriority ? "pl-2" : "pl-5")}>
-          {isPriority && <span className="text-center">Order</span>}
-          <span>Student</span>
-          <span>Type</span>
-          <span>Status and score</span>
-          <span className="text-right">Dates</span>
+        <div className={cn("hidden items-center gap-x-4 border-b py-1.5 pr-2 pl-2 text-xs text-muted-foreground md:grid", cols)}>
+          {isPriority ? (
+            <>
+              <span className="pl-1">Order</span>
+              <span>Student</span>
+              <span>Type</span>
+              <span>Status and score</span>
+              <span className="text-right">Dates</span>
+            </>
+          ) : (
+            <>
+              <span className="text-center" title="Star a document to put it on your Priority list">
+                <Star className="mx-auto size-3.5" aria-label="Priority" />
+              </span>
+              <span>
+                <SortButton k="student" label="Student" sort={sort} onSort={chooseSort} />
+              </span>
+              <span>
+                <SortButton k="type" label="Type" sort={sort} onSort={chooseSort} />
+              </span>
+              <span className="flex flex-wrap gap-x-3">
+                <SortButton k="status" label="Status" sort={sort} onSort={chooseSort} />
+                <SortButton k="score" label="Score" sort={sort} onSort={chooseSort} />
+              </span>
+              <span className="flex flex-wrap justify-end gap-x-3">
+                <SortButton k="updated" label={updatedLabel} sort={sort} onSort={chooseSort} />
+                <SortButton k="uploaded" label="Uploaded" sort={sort} onSort={chooseSort} />
+              </span>
+            </>
+          )}
           <span className="sr-only">Actions</span>
         </div>
         <div ref={box} className="relative overflow-hidden">
@@ -482,52 +581,122 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
                     key={job.id}
                     data-flip={job.id}
                     className={cn(
-                      "doc-row group grid items-center gap-x-2 pr-2 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 md:gap-x-4",
-                      isPriority ? "grid-cols-[auto_1fr_auto] pl-1 md:pl-2" : "grid-cols-[1fr_auto] pl-4 md:pl-5",
+                      "doc-row group grid items-center gap-x-2 pr-2 pl-1 transition-colors focus-within:bg-secondary/50 hover:bg-secondary/50 md:gap-x-4 md:pl-2",
                       cols,
                     )}
                   >
-                    {isPriority && (
-                      <button
-                        type="button"
-                        className={cn(
-                          "drag-grip flex h-11 items-center justify-center gap-0.5 rounded-md text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-                          canDrag ? "hover:bg-secondary hover:text-foreground" : "cursor-default",
+                    {isPriority && rank ? (
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          className={cn(
+                            "drag-grip flex h-10 w-6 items-center justify-center rounded-md text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                            canDrag ? "hover:bg-secondary hover:text-foreground" : "pointer-events-none opacity-30",
+                          )}
+                          aria-label={`Drag to move ${nameOf(job)}, or use the arrow keys`}
+                          title={canDrag ? "Drag to move" : "Clear the search to drag"}
+                          aria-disabled={!canDrag}
+                          onPointerDown={(e) => onGripDown(e, job)}
+                          onKeyDown={(e) => onGripKey(e, job)}
+                        >
+                          <GripVertical className="size-4" />
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <button
+                                type="button"
+                                className="inline-flex h-9 min-w-11 items-center justify-center gap-0.5 rounded-lg border border-star/40 bg-star-soft px-1.5 font-serif text-lg font-semibold text-mark-foreground tabular-nums transition-colors hover:border-star focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                aria-label={`${nameOf(job)} is number ${rank}. Choose another number`}
+                                title="Choose another number"
+                              />
+                            }
+                          >
+                            {rank}
+                            <ChevronDown className="size-3 opacity-70" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="max-h-80 w-52">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Move {nameOf(job)} to number</DropdownMenuLabel>
+                              {plist.map((p, i) => (
+                                <DropdownMenuItem key={p.id} disabled={i + 1 === rank} onClick={() => moveTo(job.id, i)}>
+                                  <span className="w-5 text-right font-semibold tabular-nums">{i + 1}</span>
+                                  <span className="truncate text-muted-foreground">{i + 1 === rank ? "now" : `instead of ${nameOf(p)}`}</span>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuGroup>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => void toggleStar(job)}>
+                              <StarOff /> Remove from Priority
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="flex flex-col">
+                          <button
+                            type="button"
+                            className="flex h-5 w-6 items-center justify-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-25"
+                            disabled={rank === 1}
+                            aria-label={`Move ${nameOf(job)} up to number ${rank - 1}`}
+                            title="Move up"
+                            onClick={() => moveTo(job.id, rank - 2)}
+                          >
+                            <ChevronUp className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="flex h-5 w-6 items-center justify-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-25"
+                            disabled={rank === plist.length}
+                            aria-label={`Move ${nameOf(job)} down to number ${rank + 1}`}
+                            title="Move down"
+                            onClick={() => moveTo(job.id, rank)}
+                          >
+                            <ChevronDown className="size-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-center">
+                        {open ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "star-toggle inline-flex h-10 min-w-10 items-center justify-center gap-0.5 rounded-full px-1.5 transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                              rank ? "bg-star-soft text-mark-foreground hover:bg-star-soft/70" : "text-muted-foreground/70 hover:bg-star-soft hover:text-star",
+                            )}
+                            data-on={!!rank}
+                            aria-pressed={!!rank}
+                            aria-label={rank ? `${nameOf(job)} is number ${rank} on the Priority list. Take it off` : `Add ${nameOf(job)} to the Priority list`}
+                            title={rank ? `Number ${rank} on your Priority list. Tap to take it off` : "Add to your Priority list"}
+                            onClick={() => void toggleStar(job)}
+                          >
+                            <Star className="size-5" />
+                            {rank && <span className="text-sm font-semibold tabular-nums">{rank}</span>}
+                          </button>
+                        ) : (
+                          // done or archived: finished work isn't on the Priority list
+                          <span className="size-10" aria-hidden />
                         )}
-                        aria-label={`${nameOf(job)}: number ${rank} on the Priority list${canDrag ? ". Use the arrow keys to move it" : ""}`}
-                        aria-disabled={!canDrag}
-                        onPointerDown={(e) => onGripDown(e, job)}
-                        onKeyDown={(e) => onGripKey(e, job)}
-                      >
-                        {canDrag && <GripVertical className="size-4 shrink-0" />}
-                        <span className="min-w-5 text-center font-serif text-lg font-semibold text-foreground tabular-nums">{rank}</span>
-                      </button>
+                      </div>
                     )}
                     <Link
                       href={`/jobs/${job.id}`}
-                      className="col-span-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-sm py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:col-span-4 md:grid-cols-subgrid md:gap-y-1"
+                      className="col-span-1 grid grid-cols-1 items-center gap-x-4 gap-y-2 rounded-sm py-3.5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:col-span-4 md:grid-cols-subgrid md:gap-y-1"
                     >
                       <div className="min-w-0">
-                        <p className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate font-serif text-[1.02rem] font-semibold">{job.studentName ?? "Unnamed student"}</span>
-                          {rank && !isPriority && (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-star-soft px-1.5 py-px text-xs font-semibold text-mark-foreground tabular-nums" title={`Number ${rank} on your Priority list`}>
-                              <Star className="size-3 fill-star text-star" />
-                              {rank}
-                            </span>
-                          )}
-                        </p>
-                        <p className="truncate text-sm text-muted-foreground">{job.sourceFile ? `${job.sourceFile.name} (PDF)` : job.fileName}</p>
+                        <p className="truncate font-serif text-[1.02rem] font-semibold">{job.studentName ?? "Unnamed student"}</p>
+                        {/* phones: the type here, so the name has the whole width; the file name only when there is no name */}
+                        <p className="truncate text-sm md:hidden">{typeOf(job)}</p>
+                        <p className={cn("truncate text-sm text-muted-foreground", job.studentName && "hidden md:block")}>{job.sourceFile ? `${job.sourceFile.name} (PDF)` : job.fileName}</p>
                       </div>
-                      <div className="col-start-2 row-start-1 justify-self-end text-right md:col-start-auto md:row-start-auto md:justify-self-stretch md:text-left">
-                        <p className="text-sm text-pretty">{job.docType === "Unknown" ? "Document" : job.docType}</p>
+                      <div className="hidden md:block">
+                        <p className="text-sm text-pretty">{typeOf(job)}</p>
                         {changes !== undefined && (
                           <p className="hidden text-xs text-muted-foreground md:block">
                             {changes} changes{job.proofread?.ai ? ", with AI" : ""}
                           </p>
                         )}
                       </div>
-                      <div className="col-span-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 md:col-span-1">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                         <StatusChip status={job.status} />
                         {score !== null && (
                           <span className="inline-flex shrink-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="Score out of 100: original → latest">
@@ -561,19 +730,6 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
                       </span>
                     </Link>
                     <div className="flex items-center justify-end">
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className={cn("star-toggle", !open && "invisible")}
-                        data-on={!!rank}
-                        aria-pressed={!!rank}
-                        aria-label={rank ? `Take ${nameOf(job)} off the Priority list` : `Add ${nameOf(job)} to the Priority list`}
-                        title={rank ? `Number ${rank} on your Priority list` : "Add to Priority"}
-                        onClick={() => void toggleStar(job)}
-                        tabIndex={open ? undefined : -1}
-                      >
-                        <Star className={cn(!rank && "text-muted-foreground")} />
-                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Actions for ${nameOf(job)}`} />}>
                           <MoreHorizontal />

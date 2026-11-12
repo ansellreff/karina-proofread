@@ -69,13 +69,19 @@ export const RELEASES: Release[] = [
       },
       {
         kind: "new",
-        text: "Priority list: tap the star on any document to put it on your Priority list, and it gets a number (1, 2, 3 …) that shows in every list. In the new Priority tab you put them in your own order by dragging a document by its handle (or with the arrow keys); “Move to the top of Priority” is in the ⋯ menu. Marking a document as done takes it off the list.",
+        text: "Priority list: tap the star at the front of any document to put it on your Priority list. The star then shows its number (1, 2, 3 …) in every list, and tapping it again takes it off. In the new Priority tab you set your own order: tap a number to give the document another place, use the ▲ ▼ arrows beside it, or drag it by its handle. Marking a document as done takes it off the list.",
         href: "/?status=priority",
         where: "Documents → Priority",
       },
       {
         kind: "new",
-        text: "Every document now shows when it was uploaded as well as when it was last updated, and the documents still to finish carry their place in the queue (#1 has waited longest). Sort by “Upload order” to work through them first come, first served, or by “Newest uploads”. The app remembers the sort you chose.",
+        text: "Every document now shows when it was uploaded as well as when it was last updated, and the documents still to finish carry their place in the queue (#1 has waited longest).",
+        href: "/",
+        where: "Documents",
+      },
+      {
+        kind: "improved",
+        text: "Sorting works like in most apps: click a column title (Student, Type, Status, Score, Updated or Uploaded) to sort by it, and click it again for the other way round (A–Z / Z–A, newest / oldest first …). The arrow shows which column and which way. The list starts as Student A–Z and remembers your last choice. On a phone the same titles sit in a row above the list.",
         href: "/",
         where: "Documents",
       },
@@ -102,7 +108,7 @@ export const RELEASES: Release[] = [
         where: "Proofread record",
       },
     ],
-    commits: ["7b31092", "5ac9bf3", "772f52c", "26e0c8c", "fc795da"],
+    commits: ["7b31092", "5ac9bf3", "772f52c", "26e0c8c", "fc795da", "49ce407"],
   },
   {
     version: "6.4",
