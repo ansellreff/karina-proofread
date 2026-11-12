@@ -1,7 +1,7 @@
 import { DocumentsList } from "@/components/documents-list";
 import { UploadZone } from "@/components/upload-zone";
 import { stores } from "@/lib/storage/stores";
-import { doneSince } from "@/lib/store/archive";
+import { doneSince, isArchived } from "@/lib/store/archive";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documents" };
@@ -21,8 +21,9 @@ async function loadDocuments() {
 export default async function Inbox(props: PageProps<"/">) {
   const params = await props.searchParams;
   const { jobs, trashCount, now } = await loadDocuments();
-  const waiting = jobs.filter((j) => j.status === "new").length;
-  const ready = jobs.filter((j) => j.status === "ready").length;
+  // the same counts as the Waiting and Ready to review tabs (archived documents aren't in them)
+  const waiting = jobs.filter((j) => j.status === "new" && !isArchived(j, now)).length;
+  const ready = jobs.filter((j) => j.status === "ready" && !isArchived(j, now)).length;
   const q = typeof params.q === "string" ? params.q : "";
   const status = (["new", "ready", "done", "archived"] as const).find((s) => s === params.status) ?? "all";
 

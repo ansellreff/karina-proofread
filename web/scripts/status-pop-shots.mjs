@@ -33,5 +33,13 @@ async function run(tab, item, name) {
 
 await run("ready", "Mark as done", "done");
 await run("done", "Reopen", "reopen");
+
+// "Add to Archive" is in the ⋯ menu of a document in review, and confirms with Undo
+await page.goto("http://localhost:3000/?status=ready");
+const row = page.locator("ul.divide-y > li").first();
+await row.getByRole("button", { name: /Actions for/ }).click();
+await page.getByRole("menuitem", { name: "Add to Archive" }).click();
+if (!(await page.getByText(/added to Archive/).waitFor({ timeout: 5000 }).then(() => true, () => false))) problems.push("Add to Archive: no confirmation");
+await page.screenshot({ path: path.join(out, "add-to-archive.png") });
 await browser.close();
 console.log(problems.length ? problems.join("\n") : "Both animations played.");

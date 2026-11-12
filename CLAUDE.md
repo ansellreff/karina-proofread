@@ -30,7 +30,7 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `cd web; node scripts/shots.mjs <jobId> <outDir> [--dark-only] [--paper dark]` — screenshots of every screen, light/dark, desktop/phone (design review)
 - `cd web; node scripts/record-shots.mjs <outDir> [finished]` — Proofread record (preview data) + Archived tab screenshots, and checks the trophy swap, locked trophy, confetti and keys; `node scripts/phone-peek.mjs <path> <outDir> [screens]` — phone-size screenshots of one page
 - `run-local.bat` (repo root) — Karina's double-click start of the local app (project Node, opens localhost:3000)
-- Archive (`lib/store/archive.ts`): `job.doneAt` set by Mark as done, cleared on reopen; done ≥ `ARCHIVE_DAYS` (14) → only in the Archived tab (older documents: the record's `finishedAt`, then `updatedAt`, filled in by `app/page.tsx`)
+- Archive (`lib/store/archive.ts`): `job.doneAt` set by Mark as done, cleared on reopen; done ≥ `ARCHIVE_DAYS` (14) → only in the Archived tab (older documents: the record's `finishedAt`, then `updatedAt`, filled in by `app/page.tsx`). "Add to Archive" = `job.archivedAt` (PATCH `{archived}`; any status, status untouched; cleared by Remove from Archive or Reopen)
 
 ## Theme
 - Light/dark tokens in `web/src/app/globals.css` (`:root` and `.dark`; every pair checked ≥ 4.5:1). Never hard-code colours in components; use tokens (`--mark-foreground`, `--shadow-color` exist for chips and shadows).

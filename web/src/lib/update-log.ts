@@ -57,9 +57,15 @@ export const RELEASES: Release[] = [
       },
       {
         kind: "new",
-        text: "Archived on the Documents page: 14 days after you mark a document as done, it leaves All and Done and moves to Archived, where you can still open, download or reopen it. Only documents marked as done are archived; new and ongoing reviews never are. Done documents show how many days are left, and a search also points to matching archived documents.",
+        text: "Archived on the Documents page: 14 days after you mark a document as done, it leaves All and Done and moves to Archived, where you can still open, download or reopen it. Only documents marked as done move there by themselves; new and ongoing reviews never do. Done documents show how many days are left, and a search also points to matching archived documents.",
         href: "/?status=archived",
         where: "Documents → Archived",
+      },
+      {
+        kind: "new",
+        text: "“Add to Archive” in a document’s ⋯ menu puts it in Archived straight away, whatever its status, and changes nothing else. “Remove from Archive” (or Reopen) brings it back.",
+        href: "/",
+        where: "Documents → ⋯ menu",
       },
       {
         kind: "improved",

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ARCHIVE_DAYS, archivesIn, isArchived } from "@/lib/store/archive";
+import { ARCHIVE_DAYS, archivedSince, archivesIn, isArchived } from "@/lib/store/archive";
 import { TRASH_DAYS, type Job, type JobStatus, type TrashEntry } from "@/lib/store/types";
 import {
   AlertDialog,
@@ -109,7 +109,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
     const list = visible.filter((j) => inTab(j, tab, now) && matches(j, q));
     if (sort === "name") list.sort((a, b) => (a.studentName ?? a.fileName).localeCompare(b.studentName ?? b.fileName));
     else if (sort === "score") list.sort((a, b) => (scoreOf(a) ?? 101) - (scoreOf(b) ?? 101)); // lowest score first: needs most work
-    else if (tab === "archived") list.sort((a, b) => Date.parse(b.doneAt ?? b.updatedAt) - Date.parse(a.doneAt ?? a.updatedAt));
+    else if (tab === "archived") list.sort((a, b) => Date.parse(archivedSince(b, now) ?? b.updatedAt) - Date.parse(archivedSince(a, now) ?? a.updatedAt));
     else list.sort(byUpdated);
     return list;
   }, [visible, tab, q, sort, now]);
@@ -145,6 +145,15 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
       popReopen(from);
       toast.success("Back in review");
     }
+    router.refresh();
+  }
+
+  /** "Add to Archive" / "Remove from Archive": moves it in or out of Archived, nothing else (the status stays). */
+  async function setArchived(job: Job, archived: boolean) {
+    const res = await fetch(`/api/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived }) });
+    if (!res.ok) return toast.error("Could not update the document.");
+    const who = job.studentName ?? job.fileName;
+    toast.success(archived ? `“${who}” added to Archive` : `“${who}” removed from Archive`, { action: { label: "Undo", onClick: () => void setArchived(job, !archived) } });
     router.refresh();
   }
 
@@ -233,7 +242,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
         <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
           <Archive className="mt-0.5 size-4 shrink-0" />
           {tab === "archived"
-            ? `Documents you marked as done more than ${ARCHIVE_DAYS} days ago. They stay here until you delete them; Reopen brings one back into review.`
+            ? `Documents you added to Archive, and documents marked as done more than ${ARCHIVE_DAYS} days ago. They stay here until you delete them; Reopen or Remove from Archive brings one back.`
             : `A document moves to Archived ${ARCHIVE_DAYS} days after you mark it as done.`}
         </p>
       )}
@@ -243,7 +252,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
           <span>Student</span>
           <span>Type</span>
           <span>Status and score</span>
-          <span className="text-right">{tab === "archived" ? "Marked as done" : "Updated"}</span>
+          <span className="text-right">{tab === "archived" ? "Archived" : "Updated"}</span>
           <span className="sr-only">Actions</span>
         </div>
         {shown.length === 0 ? (
@@ -261,7 +270,7 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
             {shown.map((job) => {
               const changes = job.proofread?.changeCount ?? job.proofread?.changes.length;
               const score = scoreOf(job);
-              const at = tab === "archived" ? (job.doneAt ?? job.updatedAt) : job.updatedAt;
+              const at = tab === "archived" ? (archivedSince(job, now) ?? job.updatedAt) : job.updatedAt;
               const updated = when(at, mounted);
               const exactly = mounted ? whenExactly(at) : undefined;
               const soon = archivesIn(job, now);
@@ -327,6 +336,19 @@ export function DocumentsList({ jobs, trashCount, initialQuery, initialTab, now 
                       <DropdownMenuItem onClick={() => window.open(`/api/jobs/${job.id}/file?v=current&download=tracked`, "_self")}>
                         <Download /> Download Word file
                       </DropdownMenuItem>
+                      {!isArchived(job, now) ? (
+                        <DropdownMenuItem onClick={() => setArchived(job, true)}>
+                          <Archive /> Add to Archive
+                        </DropdownMenuItem>
+                      ) : (
+                        // only when removing it really takes it out (a document done 14+ days ago stays archived)
+                        job.archivedAt &&
+                        !isArchived({ ...job, archivedAt: undefined }, now) && (
+                          <DropdownMenuItem onClick={() => setArchived(job, false)}>
+                            <ArchiveRestore /> Remove from Archive
+                          </DropdownMenuItem>
+                        )
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem variant="destructive" onClick={() => remove(job)}>
                         <Trash2 /> Delete

@@ -52,6 +52,8 @@ export interface Job {
   manual?: { at: string };
   /** When it was marked as done (cleared when reopened); 14 days later it moves to Archived (lib/store/archive). */
   doneAt?: string;
+  /** "Add to Archive": put in Archived by hand, whatever its status (cleared by Remove from Archive or Reopen). */
+  archivedAt?: string;
 }
 
 export interface Settings {

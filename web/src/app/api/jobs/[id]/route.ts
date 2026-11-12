@@ -18,14 +18,20 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const store = st.jobs;
   const job = await store.get((await ctx.params).id);
   if (!job) return Response.json({ error: "Document not found." }, { status: 404 });
-  const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">> & { manual?: boolean };
+  const body = (await request.json()) as Partial<Pick<Job, "status" | "studentName">> & { manual?: boolean; archived?: boolean };
   if (body.status) {
     if (!STATUSES.includes(body.status)) return Response.json({ error: "Unknown status." }, { status: 400 });
-    // the archive timer starts when it is marked as done, and stops when it is reopened
+    // the archive timer starts when it is marked as done; reopening stops it and takes the document out of Archived
     if (body.status === "done" && job.status !== "done") job.doneAt = new Date().toISOString();
-    if (body.status !== "done") delete job.doneAt;
+    if (body.status !== "done") {
+      delete job.doneAt;
+      delete job.archivedAt;
+    }
     job.status = body.status;
   }
+  // "Add to Archive" / "Remove from Archive": only where it is listed, the status stays as it is
+  if (body.archived === true && !job.archivedAt) job.archivedAt = new Date().toISOString();
+  if (body.archived === false) delete job.archivedAt;
   if (body.studentName !== undefined) job.studentName = body.studentName?.trim().replace(/\s+/g, " ").slice(0, 80) || null;
   // "Proofread it myself": a manual proofread, without bot help (counted on the record with the first saved edits)
   if (body.manual === true && !job.manual) job.manual = { at: new Date().toISOString() };
