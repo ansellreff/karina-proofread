@@ -23,7 +23,7 @@ Private web app that proofreads student enrollment documents (study plans, autob
 - `python training\eval.py --bot <dir>` — score bot output vs Karina's real edits on the 6 hold-out docs (never tune rules on them)
 - `cd web; npm test` — docx writer + rules + AI-layer unit tests
 - `cd web; npm run dev` → http://localhost:3000 (jobs stored in `web/.data/`, gitignored)
-- `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; dev server must run)
+- `cd web; node scripts/e2e.mjs <sample.docx> [--pdf <sample.pdf>]` — full browser check (system Edge via playwright-core; DEV server must run: the `__superdoc` hook is off in production builds; the sample should be a real Study Plan, e.g. from `Enrollment Document_Not Checked`; open one document page first, its first dev compile can exceed the 30 s timeout)
 - `cd web; node scripts/seed.mjs <files> [--ai] [--no-proofread]` — load .docx/.pdf documents into the local app
 - `cd web; npx tsx scripts/pdf-to-docx.ts <file.pdf> --out <dir> [--text]` — check PDF→Word conversion (`lib/pdf/pdf-to-docx.ts`, pdf.js)
 - `cd web; node scripts/make-icons.mjs` — re-render the logo and icons (header `public/icons/logo.png`, tab `src/app/icon.png`, phone install) from Karina's `weblogo/karinabotlogo.png` (figure only: the words under it are cut off)

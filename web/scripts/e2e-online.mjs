@@ -43,7 +43,8 @@ try {
   const dl = await get(`/api/jobs/${job.id}/file?v=${saved.current}&download=clean`);
   const name = decodeURIComponent((dl.headers.get("content-disposition") ?? "").split("filename*=UTF-8''")[1] ?? "");
   const bytes = new Uint8Array(await dl.arrayBuffer());
-  check("export downloads the clean Word file with Karina's name", dl.ok && /^DONE_.+_clean\.docx$/.test(name) && bytes[0] === 0x50 && bytes[1] === 0x4b, name);
+  // the clean copy has the same name as the tracked one (Settings → Export file name)
+  check("export downloads the clean Word file with Karina's name", dl.ok && /^DONE_.+\.docx$/.test(name) && !/_clean\.docx$/.test(name) && bytes[0] === 0x50 && bytes[1] === 0x4b, name);
   const list = await (await get("/api/jobs")).json();
   check("the document list comes from the database", list.some((j) => j.id === job.id));
   const pages = await Promise.all(["/", "/rules", "/costs", "/settings", `/jobs/${job.id}`].map(async (p) => [p, (await get(p)).status]));

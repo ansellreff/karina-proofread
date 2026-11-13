@@ -66,7 +66,20 @@ const blocked = [];
 async function newPage(viewport) {
   const ctx = await browser.newContext({ viewport, acceptDownloads: true });
   const page = await ctx.newPage();
-  page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
+  // which page, and for a hydration warning the differing lines (+ client, - server)
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    const at = (() => {
+      try {
+        const u = new URL(page.url());
+        return u.pathname + u.search;
+      } catch {
+        return page.url();
+      }
+    })();
+    const diff = m.text().split("\n").filter((l) => /^\s*[+-]\s/.test(l)).slice(0, 6);
+    consoleErrors.push(`${at}: ${diff.length ? diff.join(" | ") : m.text().slice(0, 300)}`);
+  });
   page.on("requestfailed", (r) => blocked.push(`${r.url()} ${r.failure()?.errorText}`));
   page.on("request", (r) => {
     const u = new URL(r.url());
@@ -654,7 +667,7 @@ check("export uses Karina's file naming DONE_type_name_date (clean copy: same na
     const preview = await section.getByLabel(/^Preview:/).getAttribute("aria-label");
     await section.getByRole("button", { name: /^Block 4: V2/ }).dragTo(section.getByRole("button", { name: /^Block 1: DONE/ }));
     const afterDrag = await section.getByLabel(/^Preview:/).getAttribute("aria-label");
-    const unsavedShown = await sp.getByText("You have changes that aren't saved yet.").isVisible();
+    const unsavedShown = await sp.getByText(/You have changes that aren.t saved yet/).isVisible();
     await sp.getByRole("button", { name: "Save settings" }).click();
     await sp.waitForTimeout(800);
     const res = await fetch(`${base}/api/jobs/${job.id}/file?v=current&download=tracked`);
@@ -997,7 +1010,8 @@ try {
   await row.waitFor({ timeout: 15000 });
   const kept = await row.getByText("Document deleted, record kept").isVisible();
   const cheer = await rp.locator("[data-cheer]").waitFor({ timeout: 5000 }).then(() => true, () => false);
-  const confettiShown = await rp.locator("[data-confetti]").count().then((n) => n > 0);
+  // on a level-up the old trophy is swapped for the new one first, then the confetti starts
+  const confettiShown = await rp.locator("[data-confetti]").first().waitFor({ state: "attached", timeout: 6000 }).then(() => true, () => false);
   await rp.waitForTimeout(2500); // the numbers count up
   const finishedShown = Number(await rp.locator("[data-finished]").textContent());
   const trophy = await rp.locator("[data-trophy]").getAttribute("data-trophy");

@@ -71,8 +71,12 @@ export const RELEASES: Release[] = [
         href: "/settings",
         where: "Settings",
       },
+      {
+        kind: "fixed",
+        text: "Security update: the framework the app is built on had a serious weakness found this week. It is updated to the fixed version.",
+      },
     ],
-    commits: [],
+    commits: ["cf399ad"],
   },
   {
     version: "6.5",
