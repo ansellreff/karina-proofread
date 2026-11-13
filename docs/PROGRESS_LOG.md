@@ -1150,3 +1150,28 @@ Also part of V.6.5. From now on, all changes made on the same day are one releas
   - **Priority tab:** each row starts with a drag handle, the number (tap it to pick a place from 1 to n, each named "instead of <student>", or Remove from Priority) and ▲ ▼ buttons. Dragging needs the search cleared; the buttons and the number work anyway.
   - **Phones:** the type moved under the student's name (the file name shows only when there is no name), so names are no longer cut short.
   - **Default sort changed (Karina's request):** the first time anyone opens the app, the list shows the newest uploads first (Uploaded, newest first) instead of Student A–Z; after that each browser remembers its last choice.
+
+## V.6.6: Your own AI budget, and a tidier Settings page (2026-11-13)
+**Checked first:** the online app's Anthropic key works after the redeploy (the free token-count estimate went through on an online document; nothing was proofread or changed). The new key on this PC works too.
+
+**Request:** make the AI cost settings customizable (it only had the balance), and review the other settings.
+
+- **AI cost options** (`lib/ai/budget.ts`, `settings.cost`, read with defaults for older saved settings):
+  - a monthly budget, a warning share (default 80%), and what happens when it is used up: "Only warn me" or "Pause AI runs" (the proofread and re-check routes then refuse AI runs with a clear message until the 1st of next month; rules-only always works);
+  - a low-balance warning (default below US$2);
+  - "Ask before a costly run": when the high estimate of one AI proofread is above her amount, the Proofread window needs a "Run it anyway" tick;
+  - her own currency (three-letter code and her exchange rate, no outside service): shown beside US$ in the Proofread window, on the AI costs page and in Settings;
+  - "Add a top-up": the amount goes on top of the balance left (the balance starts again from that moment).
+- **Proofread window:** shows the month's budget, warnings when near or over it or when the balance is low, the confirm tick, and when AI runs are paused a "Use rules only" button.
+- **AI costs page:** a budget bar (spent of budget, % used, the month's projected total at the current pace), the low balance in red, amounts in her currency, and a "Budget and warnings" button to Settings.
+- **Other settings:**
+  - jump links to each section, in a clearer order (Appearance, Proofreading, AI password, AI cost, Export file name, Backup and storage);
+  - the model choice shows what one whole-document AI proofread has cost her with each model;
+  - Thoroughness gets "Low";
+  - the author name can't be saved empty;
+  - Ctrl+S saves, "Discard changes" puts back what was saved, and leaving the page with unsaved changes asks first.
+- **Found and fixed while checking:** a top-up made the form look unsaved and could have sent back the old balance date on the next save. The balance date is now kept by the server only.
+- **Verified:**
+  - unit tests (`budget.test.ts`);
+  - `scripts/cost-settings-shots.mjs` on a scratch app (refuses port 3000; free estimate only, no AI run) checks saving with Ctrl+S, the values kept after a reload, the top-up, the costs page budget bar, the estimate in IDR and the "Run it anyway" hold;
+  - screenshots light/dark, desktop/phone.

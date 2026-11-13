@@ -1,3 +1,4 @@
+import { budgetOf, stoppedMessage } from "@/lib/ai/budget";
 import { aiLockedResponse, aiUnlockedUntil } from "@/lib/ai/lock-request";
 import { NO_KEY } from "@/lib/ai/messages";
 import { systemPrompt } from "@/lib/ai/prompt";
@@ -21,6 +22,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (passage.split(/\s+/).length < 3) return Response.json({ error: "Select at least a sentence to re-check." }, { status: 400 });
   if (passage.length > 6000) return Response.json({ error: "Select a shorter passage (a few paragraphs at most)." }, { status: 400 });
   const settings = await store.getSettings();
+  const budget = await budgetOf(store, settings);
+  if (budget.stopped) return Response.json({ error: stoppedMessage(budget), budgetStopped: true }, { status: 402 });
   try {
     const res = await recheckPassage(passage, job.docType, { model: settings.model, effort: settings.effort, system: await systemPrompt(st) });
     await store.logUsage({ at: new Date().toISOString(), jobId: id, model: res.model, costUsd: res.costUsd, usage: res.usage });

@@ -35,6 +35,46 @@ export const APP_NAME = "Karina Proofread Bot";
 
 export const RELEASES: Release[] = [
   {
+    version: "6.6",
+    date: "2026-11-13",
+    kind: "minor",
+    title: "Your own AI budget",
+    summary: "Set a monthly AI budget, get warned before you run low or go over, confirm costly runs, add top-ups and see costs in your own currency. Settings is easier to find your way around.",
+    points: [
+      {
+        kind: "new",
+        text: "A monthly AI budget: say how much you want to spend on AI each month and at what share the app should warn you. When it’s used up, choose “Only warn me” or “Pause AI runs” until the 1st of next month. Rules-only proofreading always works. The AI costs page shows how much of it is used and what the month is heading for at your pace.",
+        href: "/settings#ai-cost",
+        where: "Settings → AI cost",
+      },
+      {
+        kind: "new",
+        text: "“Ask before a costly run”: when one AI proofread may cost more than the amount you set, the Proofread window asks you to confirm first. A low-balance warning tells you when your estimated balance drops below your amount.",
+        href: "/settings#ai-cost",
+        where: "Settings → AI cost",
+      },
+      {
+        kind: "new",
+        text: "Add a top-up: bought more credit? Enter just the amount you added and it goes on top of what’s left, so you don’t have to work out the new total.",
+        href: "/settings#ai-cost",
+        where: "Settings → AI cost",
+      },
+      {
+        kind: "new",
+        text: "Costs in your currency: switch it on, enter the exchange rate (for example US$1 = 16,300 IDR) and every cost also shows in rupiah, in the Proofread window, on the AI costs page and in Settings.",
+        href: "/settings#ai-cost",
+        where: "Settings → AI cost",
+      },
+      {
+        kind: "improved",
+        text: "Settings: links at the top jump to each part; the AI model choice shows what one document has cost you with each model; Thoroughness has a Low option (quickest and cheapest); Ctrl+S saves, “Discard changes” puts back what was saved, and leaving with unsaved changes asks first.",
+        href: "/settings",
+        where: "Settings",
+      },
+    ],
+    commits: [],
+  },
+  {
     version: "6.5",
     date: "2026-11-12",
     kind: "minor",
@@ -108,7 +148,7 @@ export const RELEASES: Release[] = [
         where: "Proofread record",
       },
     ],
-    commits: ["7b31092", "5ac9bf3", "772f52c", "26e0c8c", "fc795da", "49ce407"],
+    commits: ["7b31092", "5ac9bf3", "772f52c", "26e0c8c", "fc795da", "49ce407", "372c6e7", "5a3d7c8"],
   },
   {
     version: "6.4",

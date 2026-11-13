@@ -1,8 +1,13 @@
+import { SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
+import { BudgetBar } from "@/components/budget-bar";
 import { CostChart } from "@/components/cost-chart";
 import { Section } from "@/components/rules/bits";
+import { buttonVariants } from "@/components/ui/button";
+import { budgetState, formatCost } from "@/lib/ai/budget";
 import { summarizeCosts } from "@/lib/costs";
 import { stores } from "@/lib/storage/stores";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI costs" };
@@ -16,13 +21,21 @@ export default async function CostsPage() {
   const [usage, jobs, settings] = await Promise.all([st.jobs.usage(), st.jobs.list(), st.jobs.getSettings()]);
   const c = summarizeCosts(usage, jobs, settings);
   const months = c.months.filter((m) => m.runs).reverse();
+  const budget = budgetState(settings.cost, usage, { usd: settings.balanceUsd, setAt: settings.balanceSetAt });
+  const currency = settings.cost.currency;
+  const local = (n: number) => (currency ? `about ${formatCost(n, currency, { local: "only" })}` : null);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-[1.75rem] leading-tight font-semibold">AI costs</h1>
-      <p className="mt-1 mb-6 max-w-[65ch] text-muted-foreground">
-        What the AI layer has cost, from every AI proofread and re-check. The rules engine and the score are free.
-      </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[1.75rem] leading-tight font-semibold">AI costs</h1>
+          <p className="mt-1 max-w-[65ch] text-muted-foreground">What the AI layer has cost, from every AI proofread and re-check. The rules engine and the score are free.</p>
+        </div>
+        <Link href="/settings#ai-cost" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <SlidersHorizontal /> Budget and warnings
+        </Link>
+      </div>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">
@@ -30,29 +43,49 @@ export default async function CostsPage() {
           <p className="mt-1 font-serif text-[2rem] leading-none font-semibold tabular-nums">{money(c.thisMonth.usd)}</p>
           <p className="mt-1.5 text-xs text-muted-foreground">
             {c.thisMonth.runs} AI run{c.thisMonth.runs === 1 ? "" : "s"}
+            {local(c.thisMonth.usd) && `, ${local(c.thisMonth.usd)}`}
           </p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">One AI run, on average</p>
           <p className="mt-1 font-serif text-[2rem] leading-none font-semibold tabular-nums">{c.perRun === null ? "–" : money(c.perRun)}</p>
-          <p className="mt-1.5 text-xs text-muted-foreground">over {c.runs} runs, {money(c.total)} in all</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            over {c.runs} runs, {money(c.total)} in all{c.perRun !== null && local(c.perRun) && `; one run is ${local(c.perRun)}`}
+          </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className={cn("rounded-lg border bg-card p-4", budget.lowBalance && "border-destructive/50")}>
           <p className="text-sm text-muted-foreground">Balance left</p>
           {c.balance ? (
             <>
-              <p className="mt-1 font-serif text-[2rem] leading-none font-semibold tabular-nums">{money(c.balance.left)}</p>
-              <p className="mt-1.5 text-xs text-muted-foreground">{c.balance.runsLeft === null ? "estimated" : `enough for about ${c.balance.runsLeft} more AI runs`}</p>
+              <p className={cn("mt-1 font-serif text-[2rem] leading-none font-semibold tabular-nums", budget.lowBalance && "text-destructive")}>{money(c.balance.left)}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {budget.lowBalance ? "low: time to top up" : c.balance.runsLeft === null ? "estimated" : `enough for about ${c.balance.runsLeft} more AI runs`}
+                {local(c.balance.left) && `, ${local(c.balance.left)}`}
+              </p>
             </>
           ) : (
             <p className="mt-2 text-sm">
-              <Link href="/settings" className="text-primary underline-offset-2 hover:underline">
+              <Link href="/settings#ai-cost" className="text-primary underline-offset-2 hover:underline">
                 Enter your API balance
               </Link>{" "}
               to see what’s left.
             </p>
           )}
         </div>
+      </div>
+
+      <div className="mb-5 rounded-lg border bg-card p-4">
+        {budget.budgetUsd !== null ? (
+          <BudgetBar budget={budget} money={(n) => formatCost(n, currency)} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No monthly budget yet.{" "}
+            <Link href="/settings#ai-cost" className="text-primary underline-offset-2 hover:underline">
+              Set one
+            </Link>{" "}
+            to see how much of it is used, with a warning before you go over.
+          </p>
+        )}
       </div>
 
       <Section title="Per month" hint="The last 12 months. Hover or tap a bar for its amount.">

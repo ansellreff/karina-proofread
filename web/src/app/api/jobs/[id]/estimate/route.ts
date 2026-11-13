@@ -1,3 +1,4 @@
+import { budgetOf } from "@/lib/ai/budget";
 import { aiLockedResponse, aiUnlockedUntil } from "@/lib/ai/lock-request";
 import { NO_KEY } from "@/lib/ai/messages";
 import { systemPrompt } from "@/lib/ai/prompt";
@@ -19,9 +20,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   try {
     const [original, rules, system] = await Promise.all([store.readVersion(job.id, 0), st.config.loadRules(), systemPrompt(st)]);
     const est = await estimateAiCost(original, { fileName: job.fileName, rules, ai: { model: settings.model, effort: settings.effort, system } });
-    const spent = await store.spendSince(settings.balanceSetAt);
-    const remaining = settings.balanceUsd === null ? null : settings.balanceUsd - spent;
-    return Response.json({ ...est, remainingUsd: remaining });
+    const budget = await budgetOf(store, settings);
+    // the dialog warns, asks before a costly run, or explains that the month's budget has paused AI runs
+    return Response.json({ ...est, remainingUsd: budget.balanceLeftUsd, budget, cost: settings.cost });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Estimate failed." }, { status: 502 });
   }

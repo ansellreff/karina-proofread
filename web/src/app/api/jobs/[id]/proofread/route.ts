@@ -1,3 +1,4 @@
+import { budgetOf, stoppedMessage } from "@/lib/ai/budget";
 import { aiLockedResponse, aiUnlockedUntil } from "@/lib/ai/lock-request";
 import { NO_KEY } from "@/lib/ai/messages";
 import { systemPrompt } from "@/lib/ai/prompt";
@@ -24,6 +25,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const settings = await store.getSettings();
   if (ai && !process.env.ANTHROPIC_API_KEY) return Response.json({ error: NO_KEY }, { status: 400 });
   if (ai && !(await aiUnlockedUntil())) return aiLockedResponse();
+  if (ai) {
+    const budget = await budgetOf(store, settings);
+    if (budget.stopped) return Response.json({ error: stoppedMessage(budget), budgetStopped: true }, { status: 402 });
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

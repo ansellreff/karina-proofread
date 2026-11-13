@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { normalizeCost } from "../ai/budget";
 import { acceptAllRevisions } from "../docx/accept";
 import { DocxPackage } from "../docx/package";
 import { bodyParagraphs } from "../docx/paragraphs";
@@ -256,6 +257,7 @@ export class FileJobStore implements JobStore {
     const s: Settings = { ...DEFAULT_SETTINGS, ...((await readJson<Partial<Settings>>(this.files, "settings.json")) ?? {}) };
     // the old default order (DONE_name_type_date) moved to DONE_type_name_date; a format she customised is kept
     if (JSON.stringify(normalizeFormat(s.fileName)) === JSON.stringify(OLD_DEFAULT_FILE_NAME)) s.fileName = DEFAULT_FILE_NAME;
+    s.cost = normalizeCost(s.cost); // settings saved before the AI cost options get the defaults
     return s;
   }
 

@@ -1,3 +1,4 @@
+import { DEFAULT_COST, type CostSettings } from "../ai/budget";
 import { DEFAULT_FILE_NAME, type FileNameFormat } from "../naming";
 import type { ChangeRecord } from "../pipeline";
 import type { DocType } from "../rules/types";
@@ -68,6 +69,8 @@ export interface Settings {
   balanceSetAt: string | null;
   /** How downloads are named (Settings → Export file name). */
   fileName: FileNameFormat;
+  /** Budget, warnings and currency (Settings → AI cost; lib/ai/budget). */
+  cost: CostSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -78,6 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
   balanceUsd: null,
   balanceSetAt: null,
   fileName: DEFAULT_FILE_NAME,
+  cost: DEFAULT_COST,
 };
 
 /** Days a deleted document stays in Recently deleted before it is deleted forever. */
